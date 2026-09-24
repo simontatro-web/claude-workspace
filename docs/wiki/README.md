@@ -11,4 +11,6 @@ Cowork links (claude.ai/cowork/...) only resolve inside Cowork.
 | — | nvme-drive-failure | not copied yet |
 | — | jarvis-incidents | not copied yet |
 | — | jarvis-system-build | not copied yet |
-| — | jarvis-orchestrator | not copied yet (most important missing one) |
+| jarvis-orchestrator.md | jarvis-orchestrator | copied Sep 24 2026 (ntfy topic redacted) |
+| — | jarvis-model-research | not copied yet |
+| — | jarvis-system-gaps | not copied yet |

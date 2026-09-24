@@ -43,6 +43,42 @@ Full detail: [wiki/v100-hardware-and-models.md](wiki/v100-hardware-and-models.md
 2. Rebuild with flash attention (helps prompt speed and frees VRAM for context, not decode speed)
 3. ngram-mod speculation was tested and gave no gain
 
+## Orchestrator / "system not a chat box" (as of Sep 14–15, pre-rebuild)
+
+Full detail: [wiki/jarvis-orchestrator.md](wiki/jarvis-orchestrator.md)
+
+**Warning:** everything in this section was built before the Sep 21 rebuild (new NVMe, fresh Ubuntu).
+Whether it was restored from backup is unknown. Re-check the box before assuming any of it still exists.
+
+Four-layer design: the model is one component of the system, not the whole system.
+
+| Layer | What | Status (Sep 14–15) |
+|---|---|---|
+| 1 State | `~/jarvis.db` (SQLite: jobs, deadlines, findings, runs, approvals) + `~/jarvis_api.py` FastAPI on 127.0.0.1:8110 | Built, systemd unit, survived a reboot |
+| 2 Workers | `~/jarvis_worker.py`: 3 coding threads + 1 general + reaper | Built, systemd |
+| 3 Notify | `~/jarvis_notifier.py` → ntfy.sh push to phone (topic in `~/.ntfy-topic`) | Built, systemd, push confirmed landing on phone |
+| 4 Health | `~/jarvis_healthcheck.py`: 6 checks, alerts on change | Built, **systemd unit never installed** |
+| Coding | GVS5H multi-agent harness via `~/jarvis_coding_run.py` | Proven end to end (job 25) |
+| Supervisor/router | `~/jarvis-supervisor.py` proxy on :8100, Qwen3-1.7B router on CPU | Died in reboot, never a unit; to be cut down to a proxy only |
+| Embedding | embeddinggemma-300M on :8102 (CPU) | Died in reboot, never a unit |
+| Reranker | Qwen3-Reranker-0.6B | Not downloaded |
+
+Decisions made:
+- All small models run on CPU as independent systemd units. The supervisor is only an HTTP proxy
+  and health aggregator and must never be able to kill a process.
+- Proposed: route requests to **pipelines**, not models (chat → 27B, coding → queue job,
+  factual → retrieval, research → background job). When unsure, route to plain chat.
+
+Open items:
+- Install `jarvis-health.service`; add an Open WebUI (:3000) check; alert on any drop in NVMe available_spare
+- Open WebUI resets Function Calling to "Default" on every new chat. **Set it to Native first**, or tool calls are fake
+- Recreate Open WebUI only with `~/recreate-webui.sh`. Jarvis twice gave `-p 3000:3000` (it must be 3000:8080)
+- simon is in the docker group, so Jarvis can kill any container. The operating manual (§13) doesn't cover docker
+- Is a web search backend configured in Open WebUI? Unverified (SearXNG would be the cheap fix)
+- RAG corpus for the anti-hallucination harness: Jack hasn't chosen one
+- API auth; per-type executors; a `run_command` job type (deferred)
+- Tailscale Funnel was found ON (Open WebUI public) and turned off Sep 15. Recheck after the rebuild
+
 ## What Jarvis can do today (live on jarvis-1)
 
 - `create_tool`: writes new endpoints into `~/jarvis-tools/plugins/` and
@@ -90,7 +126,8 @@ the detectors hidden. Hiding the scorer is not enough; it has to be unwritable.
 
 ## Open questions / unknowns
 
-- Orchestrator design: which models it routes between and on what rules
-- Remaining Cowork pages not copied yet: jarvis-orchestrator, jarvis-system-build,
-  jarvis-incidents, local-ai-setup, nvme-drive-failure, esc4000-parts-order
+- Which Sep 14 components survived the Sep 21 rebuild (DB, units, supervisor, `~/jarvis-tools`)
+- Remaining Cowork pages not copied yet: jarvis-system-build,
+  jarvis-incidents, local-ai-setup, nvme-drive-failure, esc4000-parts-order,
+  jarvis-model-research, jarvis-system-gaps
 - Where the Jarvis source lives (not in this repo yet)
