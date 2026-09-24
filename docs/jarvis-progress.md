@@ -43,6 +43,34 @@ Full detail: [wiki/v100-hardware-and-models.md](wiki/v100-hardware-and-models.md
 2. Rebuild with flash attention (helps prompt speed and frees VRAM for context, not decode speed)
 3. ngram-mod speculation was tested and gave no gain
 
+## The backlog: what Jack wants jarvis-1 to become
+
+Full detail: [wiki/jarvis-system-build.md](wiki/jarvis-system-build.md) (24 numbered "wants" + build order).
+The governing idea: **wherever there's a checkable answer, the local model works; wherever judgment is
+the product, it doesn't.** That single test decides most design calls below.
+
+Highest-priority / near-term:
+- **WANT 19 backup** — top of the board. One box, one drive, no off-box backup. A `~/jarvis-backup-stage/`
+  exists but sits on the same drive, isn't refreshed, and copied Open WebUI's DB hot. Not a real backup yet.
+- **Schoolwork tracker** — the only item with a real deadline, still zero code. Read MindTap/D2L for due
+  dates, extract problems, tutor, check his work after, drill what he misses. (Never do graded homework — his own rule.)
+- **WANT 22 writing capture** — start collecting his writing now; it's the blocker on the WANT 6 style fine-tune.
+
+The rest, grouped:
+- **Interaction:** voice dispatcher on the 27B (WANT 1), two jobs at once with a 3-slot semaphore (WANT 2),
+  "Hey Jarvis" wake word via iOS Vocal Shortcuts / openWakeWord (WANT 13), a served-from-box control-room UI Jarvis writes (WANT 4)
+- **Autonomy:** grounded review loops — reviewer interprets a ground-truth signal, never replaces it (WANT 3);
+  three-rung escalation ladder 27B → GLM → Claude, GLM resident in RAM (WANT 9); overnight goal research (WANT 21);
+  a daily "what did Jarvis do" audit log (WANT 20)
+- **Building things:** YouTube pipeline, 5 of 6 stages work today (WANT 5); fine-tune-a-model job (WANT 6);
+  3D-printer end to end incl. vision print-watching (WANT 12); robotics with limits in firmware not the prompt (WANT 11)
+- **Serving others:** AI baked into his websites, with a strict rule that a public endpoint never touches the
+  Jarvis preset / `run_host_command` (WANT 7); precompute and serve static wherever possible
+- **Learning:** build an AI from scratch, microgpt first for the win then micrograd/makemore (WANT 23) —
+  the one area the V100s are ideally suited to; uncensored model as a red-team advisor for hardening his own box only (WANT 24)
+- **Life admin:** email/calendar triage (WANT 14), marketplace watches via a proxy service not his login (WANT 15),
+  workout/diet nudges (WANT 16); location nudges (WANT 17) and music analysis (WANT 18) deprioritised
+
 ## Orchestrator / "system not a chat box" (as of Sep 14–15, pre-rebuild)
 
 Full detail: [wiki/jarvis-orchestrator.md](wiki/jarvis-orchestrator.md)

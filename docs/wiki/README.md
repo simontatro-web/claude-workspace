@@ -10,7 +10,7 @@ Cowork links (claude.ai/cowork/...) only resolve inside Cowork.
 | — | local-ai-setup | not copied yet |
 | — | nvme-drive-failure | not copied yet |
 | — | jarvis-incidents | not copied yet |
-| — | jarvis-system-build | not copied yet |
+| jarvis-system-build.md | jarvis-system-build (the wants backlog) | copied Sep 24 2026 |
 | jarvis-orchestrator.md | jarvis-orchestrator | copied Sep 24 2026 (ntfy topic redacted) |
 | — | jarvis-model-research | not copied yet |
 | — | jarvis-system-gaps | not copied yet |
