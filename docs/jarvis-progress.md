@@ -3,29 +3,45 @@
 Pulled from a Cowork session transcript (pasted 2026-09-24). Claims below are as
 Cowork reported them; not re-verified in this repo. Update as things change.
 
-## Hardware / box
+## Hardware: jarvis-1 (ASUS ESC4000, Z10PG-D16 board)
 
-- Host: `jarvis-1`. Bandwidth-bound (memory bandwidth limits tokens/sec), so
-  **active parameters per token matter more than total size**.
-- GPU note: FP8 builds are "dead on Volta", which implies Volta-generation GPU(s).
-- TODO: record exact CPU / RAM / GPU / disk here.
+Full detail: [wiki/v100-hardware-and-models.md](wiki/v100-hardware-and-models.md)
 
-## Model choice (local, via llama.cpp `llama-server` on :8080)
+- GPUs: 2x Tesla V100 PCIe 16GB (32 GB VRAM, Volta sm_70, 900 GB/s HBM2 each), power cap 200 W
+- CPU: dual Xeon E5-2699 v3 (AVX2, no AVX-512)
+- RAM: 503 GiB (16x 32GB M393A4K40BB0-CPB), runs at 1866 MT/s (2-DIMM-per-channel downclock).
+  CPU-side bandwidth ~33-34 GB/s effective, the limit for anything running in RAM
+- Boot: Samsung 990 PRO NVMe, fresh Ubuntu 24.04 (Sep 21 rebuild). The first NVMe died; watch SMART on big downloads
+- **Hard constraints:** CUDA ≤ 12.9 (13.x drops sm_70), driver R580 (last branch for Volta),
+  llama.cpp must be built from source, `-sm layer` is the only multi-GPU split mode that works on V100
 
-Artificial Analysis Intelligence Index (same ten evals for all):
+## Current production setup (Sep 21, measured)
 
-| Model                  | Index | Total / active          | Native ctx | Notes |
-|------------------------|-------|-------------------------|------------|-------|
-| GLM-5.3-Flash          | 42    | 320B / 18B              | 1M         | ~186 GiB at Q4; best at terminal/tool agency; most honest (AA-Omniscience +7); 92.22% top-1 at Q4_K_XL |
-| Qwen3.8-Flash-Next     | 40    | 125B (+51B n-gram) / 6B | 262K       | **Current pick.** ~103.7 GiB at Q4; MTP drafts in-repo; mainline llama.cpp; AA-Briefcase 1597 (strong at business/docs); AA-Omniscience −10 |
-| DeepSeek V4.1 Flash    | 39    | 552B / 16B              | 1M         | llama.cpp mainline supports it (`LLM_ARCH_DEEPSEEK4`), but only Q2 / FP8 GGUFs from small uploaders. Revisit if Unsloth ships a Q4 |
-| DeepSeek V4 Flash 0731 | 34    | 284B / 13B              | —          | Deprecated by DeepSeek |
+- llama.cpp b11089-f4e276a20, driver 580.178.04, CUDA 12.9
+- `llama-server.service` (user simon): `ggml-org/Qwen3.8-27B-GGUF:Q4_K_M`, `-ngl 99 -sm layer -ctk q8_0 -ctv q8_0 -c 8192 --jinja`, port 8080
+- **28 t/s generation**, ~300 t/s prompt (Sep 12 baseline before the rebuild: 32 t/s)
+- Flash attention is compiled OUT; the vision encoder uses ~4.3 GiB on GPU0, leaving ~1.3 GiB free, so context can't be raised yet
+- Unsecured: no API key, CORS open, bound to 0.0.0.0
 
-- The three live models are within 3 points, so treat them as roughly equal on capability.
-- Vendor benchmark cards barely overlap, so use the AA index as the only fair comparison.
-- **Decision:** Qwen3.8-Flash-Next is the default, roughly 6–8x faster than GLM-5.3-Flash on this box.
-  Use GLM-5.3-Flash only for terminal/tool-agency jobs, or where a confident
-  hallucination is expensive. (Candidate routing rule for the orchestrator.)
+## Model roles
+
+- **Interactive / agentic:** Qwen3.8-27B on the GPUs. Nothing in the 32 GB class is meaningfully smarter.
+- **Batch / overnight (CPU RAM, ~1.3–5 t/s):** big MoE models. As of Sep 22 on 503 GiB:
+  - GLM-5.3 full: runs on the stock build today, ~2.7 t/s estimated. Jack's stated target.
+  - GLM-5.3-Flash: needs a fork (3 unmerged PRs); a patched build exists at `~/glm5-llama.cpp`
+  - Hy4-preview UD-IQ1_M: fits now, ~2.2 t/s estimated
+  - MiMo-V2.6-Pro: no GGUF published yet
+- **Small always-resident helpers:** router Qwen3-1.7B, embeddinggemma, Qwen3-Reranker-0.6B
+- Later Cowork chat recommended Qwen3.8-Flash-Next (125B / 6B active, ~103.7 GiB at Q4) for the RAM
+  slot, calling it ~6-8x faster than GLM-5.3-Flash. Not yet reconciled with the table above.
+
+## Speed upgrades queued for the 27B
+
+1. **MTP speculative decoding** (the big one): switch to a GGUF with MTP heads
+   (unsloth or Jackrong, not ggml-org), `--spec-type draft-mtp --spec-draft-n-max 2 --parallel 1`.
+   A 2x V100 data point hit 47 t/s. Without speculation the bandwidth ceiling is ~50 t/s
+2. Rebuild with flash attention (helps prompt speed and frees VRAM for context, not decode speed)
+3. ngram-mod speculation was tested and gave no gain
 
 ## What Jarvis can do today (live on jarvis-1)
 
@@ -75,5 +91,6 @@ the detectors hidden. Hiding the scorer is not enough; it has to be unwritable.
 ## Open questions / unknowns
 
 - Orchestrator design: which models it routes between and on what rules
-- Exact hardware specs of jarvis-1
+- Remaining Cowork pages not copied yet: jarvis-orchestrator, jarvis-system-build,
+  jarvis-incidents, local-ai-setup, nvme-drive-failure, esc4000-parts-order
 - Where the Jarvis source lives (not in this repo yet)
