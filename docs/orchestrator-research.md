@@ -359,3 +359,158 @@ This makes MiMo a scheduled, approved event (night window, like the benchmark ru
 - The documented failure from the literature: Darwin Gödel Machine runs **faked test logs and removed detectors**, even with the detectors hidden (Part 4, jarvis-progress). That is why the scorer must be unwritable, not merely hidden (section 2.1).
 - Held-out leakage: if `jarvis` can read the held-out tests, scores become meaningless. They live mode 700 under `jarvis-eval`.
 - **Conflicts with N13 ("never break") by nature.** It is only compatible because promotion needs your approval and the production units are out of its reach.
+
+### N6. Deep research all night ("research what hardware I could buy that would improve you")
+
+**Have**
+- A full spec already written: `D:\models\RESEARCH-SPEC.md`, summarised in `deep-research-optimization` (scoping interview → query matrix → crawl with saturation stopping → per-claim table with verbatim quotes → gate → one synthesis pass → adversarial review → report with a "what I could not establish" section).
+- Jarvis's `web_search` (DuckDuckGo scraping) and `save_finding` tools.
+- The headed Chrome/CDP stack if it survived the rebuild (VERIFY; Part 5 lists no browser service).
+- Research downloads that may be on the drive: rerankers, embeddings, SimpleQA/FRAMES/RAGTruth datasets, corpora (PMC, PubMed, Wikipedia ZIMs). Which ones landed is VERIFY.
+
+**Options found**
+- **local-deep-research**: MIT, ~9.1k stars.
+  - Speaks llama.cpp's OpenAI endpoint at `localhost:8080/v1` directly.
+  - Engines: arXiv, PubMed, Semantic Scholar, Wikipedia, SearXNG, GitHub, Wayback, Google, Brave.
+  - Claims ~95.7% SimpleQA with the previous-generation 27B on one 3090.
+  - Its own run times are 1-5 min (quick) to 10-30 min (full report) (SOURCE: [github.com/LearningCircuit/local-deep-research](https://github.com/LearningCircuit/local-deep-research)).
+  - SimpleQA is short factoid questions, not multi-source synthesis; that number is not "research accuracy" (deep-research-optimization).
+- **Search APIs, as of this session:**
+  - **Tavily:** 1,000 credits/month free, no card; $0.008/credit after (SOURCE: [Tavily pricing](https://help.tavily.com/articles/8816424538-pricing)).
+  - **Serper:** 2,500 free credits (valid 6 months), then ~$1 per 1,000 down to $0.30 (SOURCE: [serper.dev](https://serper.dev/)).
+  - **Brave:** free tier removed Feb 2026. Now $5/month in credits (~1,000 queries), a card on file is billed beyond that, and attribution is required (SOURCE: [implicator.ai report](https://www.implicator.ai/brave-drops-free-search-api-tier-puts-all-developers-on-metered-billing/)).
+  - **SearXNG:** its maintainers report Google down, Bing irrelevant, DuckDuckGo CAPTCHAs (Jan 2026; deep-research-optimization). **Do not build on it.**
+
+**How it should work**
+- Research is a job type behind the N1 gate. Scoping is the interview, and "what would change the answer" is mandatory.
+- The worker runs the crawl:
+  - frontier table, dedupe, a checkpoint per document, a hard budget in code, novelty-rate saturation as the stopping rule;
+  - claims stored with a verbatim quote;
+  - claims gated by the groundedness checker;
+  - a sample re-fetched and string-matched;
+  - numbers never paraphrased;
+  - one synthesis pass, then a review by a different model family.
+- Output: a document in the repo or memory, plus the claim table. In the morning you get a notification with counts (documents read, claims kept, claims dropped) and the "could not establish" list.
+- For your example ("hardware that would improve you"), the brief must carry the box facts so the research is about *this* box:
+  - Haswell AVX2, DDR4 at 1866, PCIe 3.0;
+  - V100 is the last CUDA/driver generation;
+  - the 240 V circuit question.
+
+  The wiki already holds a lot of this: the E5-2699 v4 swap at ~$150-240 for the pair (SOURCE: system-performance-levers; price VERIFY), the 1 TB RAM path, gpu-upgrade-options.
+
+**Throughput** (ESTIMATE)
+- The research spec estimates ~1,600 documents per 8-hour night single-stream at the old 145 t/s prefill; 2,000-3,000 with batching.
+- If the Sep 22 ~630 t/s prefill still holds on the current config (VERIFY), the 27B could read several thousand extracted pages a night. That uses the GPU slot you chat on, so reading runs at night and in batch.
+- Flash-Next prefill is unmeasured; it decides whether reading moves to the CPU.
+- Search volume: a deep night of 200-500 queries. Tavily free plus Brave credits (~2,000/month together) covers roughly 4-8 deep nights a month. Serper at ~$1/1K covers the rest, well inside $25.
+
+**Which model**
+- Triage: the 1.7B router with grammar-forced labels (unmeasured).
+- Read and extract: the 27B at night, or Flash-Next (unmeasured).
+- Synthesis: GLM-5.3 once per night (measured 1.0-1.5 t/s; ~2-4 h for one synthesis over a 10-15K-token claim table, ESTIMATE).
+- Review: the other family.
+
+**Limits, plainly**
+- A local model cannot self-verify to your 95% bar on synthesis. AA-Omniscience penalises confident wrong answers, and local scores are negative: the 27B and Flash-Next both −10, against Claude Opus 5 +37 (model-benchmark-dataset, SOURCE: AA).
+- The design makes research auditable and flagged, not frontier-accurate.
+- The cheap fix for the conclusion: one frontier call that audits the synthesis against the claim table (the top escalation step, W9, within budget).
+
+### N7. Build any tool, e.g. a YouTube finder that returns only videos that fix what I keep getting wrong
+
+**Have**
+- The learning protocol (Part 4: only vetted, on-topic videos; random videos are harmful for you).
+- The ACT knowledge pack and generator (jarvis-act-generator).
+- The rule "diagnose from real graded work, not generated quizzes": a generated ACT diagnostic correlated only 0.26 with real results (W8).
+
+**Missing**
+- A learner model (a `skills` table).
+- YouTube access.
+- Transcript grounding.
+
+**Options found**
+- **YouTube Data API v3:** free, 10,000 units/day. `search.list` costs 100 units. Since June 2026 search is its own budget of **100 search calls/day** (SOURCE: [Google quota docs](https://developers.google.com/youtube/v3/determine_quota_cost), [socialcrawl summary](https://www.socialcrawl.dev/blog/youtube-data-api-2026)). Plenty for tutoring use.
+- **Transcripts:** `youtube-transcript-api` or `yt-dlp --write-subs`. Both are unofficial and can break when YouTube changes things. A home IP is usually fine where cloud IPs get blocked (ESTIMATE, VERIFY on the box).
+
+**How it should work, and why "accurate" is achievable here**
+1. **What you struggle with comes from data, not vibes.** A `skills` table fed by real graded work (you paste or upload it; nothing is ever submitted) and by tutoring-session mistakes. Each row carries its source (W8 rule). The finder's input is a specific misconception ("sets up related-rates with the wrong derivative variable"), not a topic name.
+2. Generate 5-10 queries. Search with filters: duration, recency, a channel allow-list you approve once (Khan Academy, The Organic Chemistry Tutor, Professor Leonard, 3Blue1Brown, and whatever you add).
+3. **Ground on the transcript, not the title.** Fetch the transcripts and chunk them. A reranker scores each chunk against the misconception text. A video qualifies only if some window actually explains that exact point. The result names the timestamp.
+4. The 27B reads only the top windows against a checklist (correct? at your level? addresses the misconception?). It returns 1-3 videos with timestamps and a one-line reason each, or "none good enough".
+5. Your thumbs-up or thumbs-down is stored and adjusts the allow-list and ranking.
+
+**"Build any tool" in general** = N2's pipeline: spec, sandbox, tests, approval, promotion. The limit is not the model. It is (a) accounts and quotas you must set up, and (b) things that need judgment with no ground truth.
+
+### N8. A fast front-desk endpoint ("status on job x", "progress on this build")
+
+**Have**
+- The Sep 14 job API had `/check_jobs`, `/job/{id}`, `/stats`, `/eta` from measured medians (MEASURED working then).
+- The 27B.
+
+**How it should work: the database answers, the model only phrases**
+- A **Front Desk** preset: a ~300-token system prompt, reasoning off, and only read-only tools: `job_status(id|name)`, `recent_events(n)`, `queue_summary()`, `whats_due()`, `system_health()`. No shell, no memory writes, no model loading.
+- Each tool returns structured facts (state, step k of n, last event, ETA from `runs` medians, blockers, pending approvals). The model restates them.
+- **If a fact is not in the tool output, the answer is "I don't have that"; never a guess.** Tested with a promptfoo suite of trap questions ("what's the status of job 999?").
+- **Even faster:** a plain `/status` command and a control-room tile that need no model at all (instant, zero hallucination risk). The model is for natural phrasing and follow-ups.
+- **Slot:** one of the 27B's two parallel slots is reserved for you. The batch semaphore never takes it (W2).
+
+**Which model**
+- The 27B. The small 1.7B could phrase templates but is weaker; not worth it while the 27B is resident.
+- Latency: time-to-first-token for a short prompt with reasoning off is **not measured** on the current config (VERIFY). Section 7 has read-only ways to get it from existing logs.
+- Estimate: well under 2 s for a status answer, if reasoning is off. **xhigh reasoning on a status question is the biggest avoidable delay**, because the model thinks before it answers. Turning it off is a per-request setting (`chat_template_kwargs`), not a server change. VERIFY the template honours it per request.
+
+### N9. A voice that talks as fast as a real human (the Iron Man Jarvis)
+
+**What "human speed" means:** conversation research puts the typical gap between turns at ~200 ms, with ~500 ms feeling natural and ~800 ms like a thoughtful pause. Production voice agents in 2026 measure ~680 ms median and ~1.2 s p95 (SOURCE: [WebRTC.ventures latency budget, Sep 2026](https://webrtc.ventures/2026/09/voice-ai-latency-budget/) and search summaries). Budget per stage: turn detection 150-300 ms, speech-to-text final 50-100 ms, LLM first token 150-400 ms, text-to-speech first audio 100-200 ms, network 30-80 ms.
+
+**Have**
+- Open WebUI voice mode: local Whisper in the container, replies spoken sentence by sentence (W1, SOURCE: Open WebUI docs via jarvis-system-build).
+- ASR models and audio.cpp GGUFs on the drive.
+- Kokoro may be on the drive (pull_addendum listed it; VERIFY).
+
+**Options found**
+- **Pipecat** (BSD-2, ~15.9k stars): a full-duplex voice pipeline with interruption handling and "smart-turn" end-of-turn detection. It supports local Whisper, Kokoro, Piper and any OpenAI-compatible LLM, with WebRTC or websocket transports (SOURCE: [github.com/pipecat-ai/pipecat](https://github.com/pipecat-ai/pipecat)).
+- **Speaches** (MIT, ~3.7k stars): an OpenAI-compatible speech-to-text and text-to-speech server (faster-whisper; Kokoro and Piper), CPU or GPU, with a realtime API (SOURCE: [github.com/speaches-ai/speaches](https://github.com/speaches-ai/speaches)).
+- **Speech-to-text on CPU:** Moonshine (built for streaming, ~100 ms class latency) and NVIDIA Parakeet TDT 0.6B v3 are far faster than Whisper-large on CPU (SOURCE: [Northflank 2026 comparison](https://northflank.com/blog/best-open-source-speech-to-text-stt-model-in-2026-benchmarks), [Moonshine vs Whisper](https://modelslab.com/blog/audio-generation/moonshine-vs-whisper-asr-real-time-speech-2026)). Haswell (no AVX-512) is slower than those test machines: VERIFY.
+- **Text-to-speech:** Kokoro-82M runs ~0.03 real-time factor on a GPU, but **~1-2 s for one short sentence on a CPU** (SOURCE: [GigaGPU](https://gigagpu.com/tts-latency-benchmarks/) and search snippets of a CPU benchmark; the CPU model is unstated). On your older Xeons, CPU text-to-speech will likely be the slowest stage (ESTIMATE).
+
+**Realistic numbers** (ESTIMATE, nothing measured)
+| Setup | Voice-to-voice |
+|---|---|
+| Today's pieces: Open WebUI voice mode, Whisper base on CPU, Kokoro on CPU, 27B with xhigh reasoning | ~2-5 s (reasoning alone can add seconds) |
+| Pipecat + Moonshine/Parakeet on CPU + 27B reasoning off + Kokoro on CPU | ~1.2-2.5 s |
+| Same with speech-to-text and text-to-speech on a GPU (needs the freed card, see below) | ~0.7-1.3 s |
+| Sub-500 ms "human" | **Not reachable** with a 27B through a speech-to-text → LLM → text-to-speech chain on V100s. Speech-to-speech models or a tiny model would be needed, and they cost the intelligence you want. |
+
+**How it should work**
+- A **Voice** preset: very short prompt, reasoning off, one or two sentences per reply, and the same read-only front-desk tools plus `submit_job` (which goes through the N1 gate: voice can start an interview, never skip it).
+- The phone client is a browser page (installed to the home screen as a web app) over Tailscale, or the iOS Vocal Shortcut "Hey Jarvis" for push-to-talk (W13).
+- **The single biggest hardware lever is freeing a GPU:** the planned single-card 27B A/B (orchestrator-slot-plan, benchmark-campaign Phase B). With one V100 free, speech-to-text plus Kokoro fit easily and both become ~100 ms class (ESTIMATE). The trade-off: a single-card 27B means a smaller quant or context. That is a benchmark question, not settled.
+
+**Risks**
+- Voice turns share the 27B with the front desk and batch jobs. The reserved slot matters even more here.
+- A microphone on your phone plus network hops: Tailscale on cellular adds 50-150 ms (ESTIMATE).
+
+### N10. Weave Jarvis into your life: check any account, do anything you could do
+
+**Honest scope first:** "anything I could do" is not possible, and parts of it are not allowed by your own rules:
+- graded schoolwork stays off-limits: read due dates, extract, tutor, check afterwards, drill (Part 4);
+- anything that sends, buys, posts or deletes needs your approval;
+- logins, 2FA prompts and CAPTCHAs are "stuck, human needed" handoffs (T4).
+
+What is realistic is read access to most accounts plus approved actions.
+
+**Options found**
+- **Gmail**
+  - **Gmail API + OAuth:** a Google Cloud app left in "Testing" status issues refresh tokens that **expire every 7 days** for Gmail scopes (SOURCE: [Google OAuth docs](https://developers.google.com/identity/protocols/oauth2), [explainer](https://www.unipile.com/google-oauth-refresh-token/)). Moving to "Production" removes that. Whether a personal, unverified production app with Gmail's restricted scopes is allowed without Google's security review is **VERIFY**. Budget time for this; it is the most common way home Gmail integrations silently die.
+  - **Simpler for reading:** IMAP with an app password (needs 2-Step Verification on the account; VERIFY app passwords are still offered for your account).
+  - **Sending:** SMTP with the same app password, always through an approval.
+- **Google Calendar:** the calendar's secret iCal address gives read-only access with no OAuth. Writing events needs the API and OAuth.
+- **School systems** (D2L Brightspace, Cengage/MindTap)
+  - Read due dates only. D2L has a calendar subscription feed (VERIFY it lists your items; notes say D2L's calendar renders empty). Cengage has no feed known here.
+  - Scraping with a real browser session is possible, but Cengage runs bot detection (Part 4). Even read-only scraping carries some risk to your account. **Your decision.** Low frequency (once a day), read-only.
+- **n8n** (self-hosted workflow automation, 400+ integrations): since v2.6 (Jan 2026) its AI agent can require human approval per tool, via Gmail, Slack, Telegram or chat (SOURCE: [n8n docs](https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/), [2026 guide](https://www.triggerworkflow.com/2026/08/n8n-human-in-the-loop-approval-guide.html)). Its licence is "fair-code" (Sustainable Use License, not OSI open source: VERIFY terms). It would be a second approvals system beside yours, so it is not recommended as the core. It is useful later for quick integrations whose actions still route to your approvals queue.
+
+**How it should work**
+- **Credentials:** stored only by `jarvis-core` (files mode 600, or systemd-creds). They are used by small "connector" tools that return data. `jarvis` never sees a raw password, so a prompt injection in an email cannot leak it (GAP 3).
+- **Every connector starts read-only.** Actions go through approvals. Trust graduation is per action type (T1: e.g. after N clean approvals you may promote "add calendar event" to automatic, and never "send email").
+- **Email is also an injection surface:** anything read from email or web pages passes the prompt-injection classifier before a tool-holding model sees it (orchestrator-slot-plan; the model is on the drive if pull_orch finished, VERIFY).
