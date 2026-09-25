@@ -42,7 +42,6 @@ SAFETY (these protect the server you run on).
 - Never run git reset --hard, git clean, or anything else that throws away work.
 - Anything that needs root: write exact commands under FOR SIMON in PROGRESS.md with what it changes, a test and an undo.
 - If the autopilot seatbelt refuses a command, do not try to get around it: do something else or end with STATUS: BLOCKED.
-- Never do Simon's graded schoolwork.
 
 STYLE. Short answers. Measured facts over guesses.
 ----------

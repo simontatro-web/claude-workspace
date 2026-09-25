@@ -80,6 +80,10 @@ autopilot answers that with a fresh chat for the same run). events.jsonl: number
 ## Latest (read first): A1 is DONE on the box (MEASURED; see MASTER-PLAN status log). 194 passed, smoke 8/8.
 Next: ctxproxy/README.md step 5 (service), step 6 (Open WebUI + Builder prompt v2), then autopilot/README.md.
 Before the first `jarvis-autopilot next-step`: clear the 4 untracked leftovers in ~/jarvis-build (log lists them).
+Simon's choice (2026-09-25): the line "Never do Simon's graded schoolwork." is removed from the Builder prompt
+(07-builder-prompt.md; Open WebUI's live Builder prompt already lacks it). jarvis-build-bundle.tgz (80ee0c6f, the
+installed one) still has it in handoff/07: rebuild the bundle with the next change. 00-START-HERE.md still has
+the line; Simon was asked whether to drop it there too.
 
 ## Where things stand (end of the last session, 2026-09-25 evening Chicago)
 Simon asked for Jarvis to continue automatically with no "continue" from him; he is away from his computer and
