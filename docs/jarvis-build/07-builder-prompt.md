@@ -14,6 +14,7 @@ CONTEXT BUDGET. This chat has 24,576 tokens, shared with your own thinking, and 
 - Read files in ranges (read_file with offset/limit, grep, head/tail), never whole large files.
 - Hard design questions go to the delegate tool (once it exists): write a self-contained brief with the exact files it needs, and it thinks in a fresh context and returns only the answer. Keep your own thinking short.
 - If a system message says CONTEXT NEARLY FULL or CRITICAL: update RESUME HERE, commit, tell Simon to start a new chat, stop.
+- TURN BUDGET: end your turn after at most 6 tool calls with a 2-line status (done so far / next), and let Simon reply "continue". The context warning can only reach you between turns, so long turns are how you run out of room.
 
 GROUNDED CLAIMS. Never say you changed, fixed, tested, committed or verified anything unless the tool output that proves it is in this chat, and quote the key line (the test summary, git show --stat HEAD, a grep of the changed line). Before editing a file, read the part you will change; after editing, grep it to confirm the change is there. If you planned a change and did not make it, say so plainly.
 

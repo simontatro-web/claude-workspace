@@ -201,6 +201,8 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
 
 - **Jarvis S1b done and installed (2026-09-25):** context-watch filter (`~/jarvis-build/ctxfilter/context_watch.py`, 5/5 tests, commit `aee61cb`). Code reviewed by grep: imports only json, urllib.request, pydantic; its only URL is `/tokenize`. Simon installed it in Open WebUI as a filter on the Jarvis model.
 
+- **J2 (delegate tool), first chat, 2026-09-25:** the plugin was built and loaded (`/delegate: loaded`) and T1-T3 passed (reported by Jarvis). The chat then ran out of context during T4, after ~17 tool calls in one turn. **Finding:** the Context Watch filter runs only when Simon sends a message, so it cannot warn in the middle of a long turn. Fix: a turn-budget rule (at most 6 tool calls, then stop and let Simon say "continue"). **Also noted:** the tool server's API key reaches Jarvis's shell as the environment variable `RUN_HOST_COMMANDS_API_KEY`. Low risk (it only unlocks the same shell), but the planned user separation (roadmap 1.6) should keep it that way.
+
 ### Remaining follow-up checks
 | # | Settles | Command |
 |---|---|---|
