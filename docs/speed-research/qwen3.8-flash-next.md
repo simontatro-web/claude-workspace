@@ -76,14 +76,14 @@ JARVIS STEP FN-1 of 13: SIMON STEP - put the two test scripts on the box
 Who: Simon, in his own SSH terminal (Jarvis cannot paste heredocs). Jarvis does nothing in this step.
 Goal: write ~/speed/scripts/cpu_test.py (the test harness; runs beside Jarvis, never touches llama-server) and ~/speed/scripts/gguf_bytes.py (read-only size calculator).
 Precondition: none. It only creates files under ~/speed.
-Do: open docs/speed-research/scripts/deliver-fn.sh (548 lines) and paste all of it into the terminal.
+Do: open docs/speed-research/scripts/deliver-fn.sh (580 lines) and paste all of it into the terminal.
 Takes: seconds.
 Expected: the last two lines printed are
- cpu_test.py: 424 lines, 24008 bytes, fafddf31f68f9b66
+ cpu_test.py: 456 lines, 26652 bytes, cd62e4e24030dc1e
  gguf_bytes.py: 115 lines, 6059 bytes, ef47398d2254c477
 PASS: both lines match exactly. FAIL: paste again; if it still differs, stop and tell Claude.
 Undo: rm ~/speed/scripts/cpu_test.py ~/speed/scripts/gguf_bytes.py (Simon's yes).
-save_finding(topic="speed-flashnext", finding="FN-1 scripts delivered, checksums fafddf31f68f9b66 and ef47398d2254c477 match", source="deliver-fn.sh")
+save_finding(topic="speed-flashnext", finding="FN-1 scripts delivered, checksums cd62e4e24030dc1e and ef47398d2254c477 match", source="deliver-fn.sh")
 ```
 
 ```text
@@ -107,23 +107,23 @@ save_finding(topic="speed-flashnext", finding="FN-2: per-token _ GB (routed-expe
 
 ```text
 JARVIS STEP FN-3 of 13: stock baseline beside Jarvis + reference output + prompt-cache test
-Goal: (a) the stock server speed on both sockets (numactl interleave, -t 18 -tb 36), (b) a saved greedy reference that later steps compare against, with a run-to-run identity check, (c) whether follow-up requests reuse the cached prompt on this hybrid model (the biggest practical risk).
+Goal: (a) the stock server speed on both sockets (numactl interleave, -t 18 -tb 36), (b) a saved greedy reference that later steps compare against, with a run-to-run identity check, (c) whether follow-up requests reuse the cached prompt on this hybrid model (the biggest practical risk), (d) whether a saved slot file lets a restarted server skip re-reading a long prompt.
 Preconditions (read-only):
  1) the NONE-ACTIVE check from the top of section C prints NONE-ACTIVE
- 2) python3 ~/speed/scripts/cpu_test.py fn-stock-il --bin stock --numa il --make-ref fn-stock --tests speed,prefill,cache --check -- -lm dio -lzm off -t 18 -tb 36 -lv 4
+ 2) python3 ~/speed/scripts/cpu_test.py fn-stock-il --bin stock --numa il --make-ref fn-stock --tests speed,prefill,cache,slot --check -- -lm dio -lzm off -t 18 -tb 36 -lv 4 --slot-save-path /home/simon/speed/slots
     must end with: CHECK OK (nothing started)
 Command:
- sudo systemd-run --unit=cpu-test --collect -p User=simon -p Group=simon -p MemoryMax=160G -p MemorySwapMax=0 -p OOMScoreAdjust=1000 -p RuntimeMaxSec=10800 -p TimeoutStopSec=180 /usr/bin/python3 /home/simon/speed/scripts/cpu_test.py fn-stock-il --bin stock --numa il --make-ref fn-stock --tests speed,prefill,cache -- -lm dio -lzm off -t 18 -tb 36 -lv 4
+ sudo systemd-run --unit=cpu-test --collect -p User=simon -p Group=simon -p MemoryMax=160G -p MemorySwapMax=0 -p OOMScoreAdjust=1000 -p RuntimeMaxSec=10800 -p TimeoutStopSec=180 /usr/bin/python3 /home/simon/speed/scripts/cpu_test.py fn-stock-il --bin stock --numa il --make-ref fn-stock --tests speed,prefill,cache,slot -- -lm dio -lzm off -t 18 -tb 36 -lv 4 --slot-save-path /home/simon/speed/slots
 Watch (every ~10 min): journalctl -u cpu-test -n 12 --no-pager -o cat | cut -c1-200
 Done when: systemctl is-active cpu-test prints inactive (or unknown).
 Read: D=$(ls -d ~/speed/results/cpu/fn-stock-il/2* | tail -1); grep -v '^command' $D/summary.txt
-Takes: ~30-40 min (load 3-6 min, 3 prompts x 2 runs x 256 tokens, a ~5K-token prefill, 3 chat turns).
+Takes: ~30-40 min (load 3-6 min, 3 prompts x 2 runs x 256 tokens, a ~5K-token prefill, 3 chat turns, a slot save and restore).
 Expected: decode mean ~5-6 t/s (MEASURED llama-bench 5.60, Sep 25); prefill ~40-50 t/s; "reference re-run identical: 3/3 | saved as reference fn-stock"; Jarvis median during within 10% of before; prompt cache PASS with turn 2 and 3 processing well under 100 tokens.
 PASS: re-run identical 3/3 AND reference saved AND Jarvis during >= 90% of before AND no STOPPED/ERROR line.
-The prompt-cache line is a finding either way. FAIL there (turn 2 or 3 re-reads most of the prompt) means every follow-up request pays the full prefill (~50 s per 2,500 tokens): tell Simon before any adoption.
+The slot line is a finding too: on this hybrid model the re-sent prompt may be re-read in full after a restore, because slot files hold the state at the end of the saved tokens and no checkpoints (ESTIMATE from the server code; this measures it). The prompt-cache line is a finding either way. FAIL there (turn 2 or 3 re-reads most of the prompt) means every follow-up request pays the full prefill (~50 s per 2,500 tokens): tell Simon before any adoption.
 FAIL (re-run not identical): greedy decoding is not deterministic on this build; stop the plan and tell Simon, because every identity check below depends on it.
-Undo: nothing to undo (the unit ends by itself; results stay in ~/speed/results/cpu).
-save_finding(topic="speed-flashnext", finding="FN-3 stock il: decode _/_/_ mean _, prefill _, rerun _/3, cache turns _ (PASS/FAIL, ckpt _ MiB), load _ s, RSS _ GiB, nodes _, Jarvis _ -> _", source="~/speed/results/cpu/fn-stock-il/<time>/summary.txt")
+Undo: nothing to undo (results stay in ~/speed/results/cpu; the slot file ~/speed/slots/cpu_test_slot.bin is overwritten by each run; delete it only with Simon's yes).
+save_finding(topic="speed-flashnext", finding="FN-3 stock il: decode _/_/_ mean _, prefill _, rerun _/3, cache turns _ (PASS/FAIL, ckpt _ MiB), slot save _ s / restore _ s / re-read _ tokens, load _ s, RSS _ GiB, nodes _, Jarvis _ -> _", source="~/speed/results/cpu/fn-stock-il/<time>/summary.txt")
 ```
 
 ```text
@@ -168,13 +168,13 @@ save_finding(topic="speed-flashnext", finding="FN-5 ik il: decode _ (x_ vs FN-3)
 
 ```text
 JARVIS STEP FN-6 of 13: NUMA placement with the stock build (no fork)
-Goal: A) interleaved memory plus --numa distribute (threads spread and pinned per node); B) first-touch placement: page cache emptied for the model files, mmap, no weight repacking, --numa distribute, so each page lands on the node whose threads read it. C (optional) separates the cost of --no-repack from the placement effect.
+Goal: A) interleaved memory plus --numa distribute (threads spread and pinned per node); B) first-touch placement: page cache emptied for the model files, mmap, no weight repacking, --numa distribute, so each page lands on the node whose threads read it. B uses -t 36 -tb 36 on purpose: pages are first touched by the batch threads (warm-up and prefill), and decode reads them locally only if it splits the rows the same way (ggml pins thread i to node i mod 2 and splits rows by thread under --numa). C (optional) separates the cost of --no-repack from the placement effect.
 Preconditions (read-only):
  1) NONE-ACTIVE check passes; FN-3 PASS
  2) grep -l Qwen3.8-Flash-Next /proc/[0-9]*/maps 2>/dev/null | wc -l    must print 0 (nothing has the model mapped, so the eviction in B can work)
 Run one at a time:
  A) sudo systemd-run --unit=cpu-test --collect -p User=simon -p Group=simon -p MemoryMax=160G -p MemorySwapMax=0 -p OOMScoreAdjust=1000 -p RuntimeMaxSec=10800 -p TimeoutStopSec=180 /usr/bin/python3 /home/simon/speed/scripts/cpu_test.py fn-il-distr --bin stock --numa il --ref fn-stock --tests speed,prefill -- -lm dio -lzm off -t 18 -tb 36 --numa distribute
- B) sudo systemd-run --unit=cpu-test --collect -p User=simon -p Group=simon -p MemoryMax=160G -p MemorySwapMax=0 -p OOMScoreAdjust=1000 -p RuntimeMaxSec=10800 -p TimeoutStopSec=180 /usr/bin/python3 /home/simon/speed/scripts/cpu_test.py fn-ft-distr --bin stock --numa none --evict --warm 3 --ref fn-stock --tests speed,prefill -- -lm mmap -lzm off --no-repack -t 18 -tb 36 --numa distribute
+ B) sudo systemd-run --unit=cpu-test --collect -p User=simon -p Group=simon -p MemoryMax=160G -p MemorySwapMax=0 -p OOMScoreAdjust=1000 -p RuntimeMaxSec=10800 -p TimeoutStopSec=180 /usr/bin/python3 /home/simon/speed/scripts/cpu_test.py fn-ft-distr --bin stock --numa none --evict --warm 3 --ref fn-stock --tests speed,prefill -- -lm mmap -lzm off --no-repack -t 36 -tb 36 --numa distribute
  C) only if B is slower than FN-3: the A command with label fn-il-norepack, and --no-repack instead of --numa distribute
 Read: for L in fn-il-distr fn-ft-distr fn-il-norepack; do D=$(ls -d ~/speed/results/cpu/$L/2* 2>/dev/null | tail -1); [ -n "$D" ] && echo "== $L" && grep -E '^(load|decode|vs ref|prefill|Jarvis|STOP|ERROR)' $D/summary.txt; done
 Takes: ~25 min each (B loads from disk after the eviction: a few minutes longer).
@@ -337,7 +337,7 @@ Why these values: `-t 18 -tb 36` (MEASURED best decode and prefill thread counts
 Swap in the ExecStart of whichever variant wins:
 - ik (FN-5): `ExecStart=/usr/bin/numactl --interleave=all /home/simon/ik_llama.cpp/build/bin/llama-server -m <same model> --no-mmap -t 18 -tb 36 -c 65536 --parallel 1 --jinja --host 127.0.0.1 --port 8081 -md <same head> --spec-type mtp:n_max=3 --spec-ckpt-mode per-step` (add `-rtr` if FN-5 used it).
 - mirror (FN-8): `ExecStart=/home/simon/ik-mirror/build/bin/llama-server -m <same model> -t 36 -tb 36 --numa mirror -c 65536 --parallel 1 --jinja --host 127.0.0.1 --port 8081` plus the ik MTP flags if FN-8 C passed; set `MemoryMax=260G`. ESTIMATE 10-13 t/s with MTP (6.4-8 x 1.57).
-- first-touch (FN-6 B): `ExecStart=/home/simon/llama.cpp-fnmtp/build/bin/llama-server -m <same model> -lm mmap -lzm off --no-repack --numa distribute -t 18 -tb 36 ...` (no numactl wrapper).
+- first-touch (FN-6 B): `ExecStart=/home/simon/llama.cpp-fnmtp/build/bin/llama-server -m <same model> -lm mmap -lzm off --no-repack --numa distribute -t 36 -tb 36 ...` (no numactl wrapper; keep -t equal to -tb, see FN-6).
 
 ## E. Open questions and VERIFY items (each with a read-only command)
 

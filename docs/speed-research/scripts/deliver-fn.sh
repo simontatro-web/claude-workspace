@@ -1,13 +1,13 @@
 # SIMON STEP: paste this whole block into your SSH terminal on jarvis-1 (as simon). It only writes two files under ~/speed/scripts.
-mkdir -p ~/speed/scripts ~/speed/results/cpu/refs ~/speed/kld
+mkdir -p ~/speed/scripts ~/speed/results/cpu/refs ~/speed/kld ~/speed/slots
 cat > ~/speed/scripts/cpu_test.py <<'CPU_TEST_END'
 #!/usr/bin/env python3
 # CPU big-model tester that runs BESIDE Jarvis. It never stops or changes llama-server (Jarvis).
 # Starts a test llama-server as a child process (CPU only, GPUs hidden) on 127.0.0.1:8082 with the given
 # binary, model, NUMA policy and flags, then measures: load time, RAM per NUMA node, decode and prefill
 # speed, draft acceptance, greedy output vs a stored reference (IDENTICAL, or first difference at a
-# NEAR-TIE = reference top-2 logprob gap <= 0.10 nats), prompt-cache reuse, 2-slot throughput and a
-# 12-item quality set. Probes Jarvis (port 8080) before/during/after; stops itself if Jarvis answers
+# NEAR-TIE = reference top-2 logprob gap <= 0.10 nats), prompt-cache reuse, slot save/restore, 2-slot
+# throughput and a 12-item quality set. Probes Jarvis (port 8080) before/during/after; stops itself if Jarvis answers
 # below 75% of its normal speed on two probes in a row. Mainline builds need -lv 4 in the server flags
 # for the cache test to count checkpoint log lines (token counts work without it).
 # Run as a unit, only when no other benchmark is active, e.g.:
@@ -26,8 +26,10 @@ REFDIR = OUTROOT + "/refs"
 BINS = {"stock": H + "/llama.cpp/build/bin/llama-server", "fnmtp": H + "/llama.cpp-fnmtp/build/bin/llama-server",
         "new": H + "/llama.cpp-tp/build/bin/llama-server", "ik": H + "/ik_llama.cpp/build/bin/llama-server",
         "ikmirror": H + "/ik-mirror/build/bin/llama-server"}
-MODELS = {"fn": H + "/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf"}
-NUMA = {"s1": ["/usr/bin/numactl", "--cpunodebind=1", "--membind=1"], "il": ["/usr/bin/numactl", "--interleave=all"], "none": []}
+MODELS = {"fn": H + "/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf",
+          "glm": H + "/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf"}
+NUMA = {"s1": ["/usr/bin/numactl", "--cpunodebind=1", "--membind=1"], "il": ["/usr/bin/numactl", "--interleave=all"],
+        "p1": ["/usr/bin/numactl", "--preferred=1"], "none": []}
 BUSY = re.compile(r"^(bench-.*|mtp-test|il-beside|glm-test.*|fn-test.*|t27-.*|big-verify|build-.*|dl-.*|kld-.*)\.service$")
 LIMIT, PROBE_EVERY = 0.75, 90
 
@@ -58,8 +60,9 @@ def records(n, seed):  # deterministic filler data
         i, r.choice(w), r.randint(2, 99), r.choice(w), r.randint(1, 28), r.choice("KQXZ"), r.randint(1, 9), r.choice("ABCD"))
         for i in range(1, n + 1)]
 
-LINES = records(200, 7)
-LONGDOC = "\n".join(LINES) + "\n\nWhich record number mentions audit code %s? Reply with only the number." % LINES[6].split()[-1].rstrip(".")
+def longdoc(n):  # ~27 tokens per line: 200 lines ~5.5K tokens, 600 lines ~16K
+    lines = records(n, 7)
+    return "\n".join(lines) + "\n\nWhich record number mentions audit code %s? Reply with only the number." % lines[6].split()[-1].rstrip(".")
 SYS = "You answer questions about the shipping log below. Answer in one short sentence.\n\n" + "\n".join(records(120, 3))
 
 def log(msg):
@@ -71,7 +74,7 @@ def sh(cmd, timeout=120):
     except Exception as e:
         return subprocess.CompletedProcess(cmd, 99, "", str(e))
 
-def http(path, body=None, port=PORT, timeout=3600):
+def http(path, body=None, port=PORT, timeout=7200):
     req = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), data=None if body is None else json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -169,14 +172,14 @@ def stop_child():
             p.kill()
             p.wait(timeout=30)
 
-def complete(prompt, n, probs=False):
-    b = {"prompt": prompt, "n_predict": n, "temperature": 0, "top_k": 1, "seed": 42, "cache_prompt": False}
+def complete(prompt, n, probs=False, cache=False):
+    b = {"prompt": prompt, "n_predict": n, "temperature": 0, "top_k": 1, "seed": 42, "cache_prompt": cache}
     if probs:
         b["n_probs"] = 2
     r = http("/completion", b)
     t = r.get("timings", {})
     out = {"text": r.get("content", ""), "tg": float(t.get("predicted_per_second", 0)), "pp": float(t.get("prompt_per_second", 0)),
-           "np": int(t.get("prompt_n", 0)), "ng": int(t.get("predicted_n", 0)),
+           "np": int(t.get("prompt_n", 0)), "ng": int(t.get("predicted_n", 0)), "pms": float(t.get("prompt_ms", 0)),
            "dn": int(t.get("draft_n", t.get("n_draft", 0)) or 0), "da": int(t.get("draft_n_accepted", t.get("n_draft_accepted", 0)) or 0)}
     if probs:
         out["toks"] = [[p.get("bytes", []), [[q.get("bytes", []), q.get("logprob", 0.0)] for q in p.get("top_logprobs", [])[:2]]]
@@ -227,6 +230,16 @@ def par_test(prompt):
     wall = time.time() - t0
     return {"single_tg": round(one["tg"], 2), "two_aggregate_tg": round(sum(r["ng"] for r in res) / wall, 2) if len(res) == 2 else None}
 
+def slot_test(prompt, prior=None):  # needs --slot-save-path; saves slot 0, erases it, restores it, re-sends the prompt
+    a = prior or complete(prompt, 16, cache=True)  # prior = the prefill test's result (same prompt, already cached)
+    sv = http("/slots/0?action=save", {"filename": "cpu_test_slot.bin"})
+    http("/slots/0?action=erase", {})
+    rs = http("/slots/0?action=restore", {"filename": "cpu_test_slot.bin"})
+    b = complete(prompt, 16, cache=True)
+    return {"prefill_s": round(a["pms"] / 1000, 1), "tokens": a["np"], "save_s": round(sv["timings"]["save_ms"] / 1000, 1),
+            "gib": round(sv["n_written"] / 2**30, 2), "restore_s": round(rs["timings"]["restore_ms"] / 1000, 1),
+            "after_restore_prompt_n": b["np"], "after_restore_prompt_s": round(b["pms"] / 1000, 1), "same_answer": a["text"] == b["text"]}
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("label")
@@ -240,6 +253,8 @@ def main():
     ap.add_argument("--evict", action="store_true")
     ap.add_argument("--no-probe", action="store_true")
     ap.add_argument("--ctx", default="32768")
+    ap.add_argument("--prefill-lines", type=int, default=200)
+    ap.add_argument("--ram-need-gib", type=float, help="override the free-RAM precondition (e.g. a model streamed from disk)")
     ap.add_argument("--max-min", type=int, default=170)
     ap.add_argument("--check", action="store_true")
     argv = sys.argv[1:]
@@ -251,6 +266,8 @@ def main():
     need = [binp] + files + [extra[i + 1] for i, x in enumerate(extra[:-1]) if x in ("-md", "--model-draft")]
     mirror = "mirror" in extra
     gib_need = sum(os.path.getsize(f) for f in files if os.path.exists(f)) / 2**30 * (2 if mirror else 1) + MARGIN
+    if a.ram_need_gib is not None:
+        gib_need = a.ram_need_gib
     busy = [u for u in sh(["systemctl", "list-units", "--type=service", "--state=active", "--no-legend", "--plain"]).stdout.split()
             if BUSY.match(u)]
     base = ["-m", model, "-c", a.ctx, "--host", "127.0.0.1", "--port", str(PORT), "--jinja"]
@@ -263,8 +280,9 @@ def main():
     problems += ["Jarvis (llama-server) not active"] if not a.no_probe and sh(["systemctl", "is-active", "--quiet", "llama-server"]).returncode else []
     problems += ["MemAvailable %.0f GiB < needed %.0f GiB" % (meminfo("MemAvailable"), gib_need)] if meminfo("MemAvailable") < gib_need else []
     problems += ["--ref file missing"] if a.ref and not os.path.exists("%s/%s.json" % (REFDIR, a.ref)) else []
-    problems += ["unknown tests: %s" % [t for t in tests if t not in ("speed", "prefill", "cache", "par", "qual")]] if any(
-        t not in ("speed", "prefill", "cache", "par", "qual") for t in tests) else []
+    known = ("speed", "prefill", "cache", "par", "qual", "slot")
+    problems += ["unknown tests: %s" % [t for t in tests if t not in known]] if any(t not in known for t in tests) else []
+    problems += ["slot test needs --slot-save-path in the server flags"] if "slot" in tests and "--slot-save-path" not in extra else []
     print("command: " + " ".join(cmd)[:1500])
     print("model files: %d, %.1f GiB (need %.0f GiB free RAM) | page cache now %s GiB" % (
         len(files), sum(os.path.getsize(f) for f in files if os.path.exists(f)) / 2**30, gib_need, cached_gib(files)))
@@ -316,9 +334,14 @@ def main():
                 return http("/apply-template", {"messages": [{"role": "user", "content": text}],
                                                 "chat_template_kwargs": {"reasoning_effort": effort}})["prompt"]
             prompts = {k: templ(t, e) for k, t, e in SPEED}
-            prompts["long"] = templ(LONGDOC, "low")
+            prompts["long"] = templ(longdoc(200), "low")
             prompts.update({"q%d" % i: templ(q, "low") for i, (q, _) in enumerate(QUAL)})
+        longp = prompts["long"]  # the standard 200-line document; a custom length is never stored in a reference
+        if a.prefill_lines != 200 and ("prefill" in tests or "slot" in tests):
+            longp = http("/apply-template", {"messages": [{"role": "user", "content": longdoc(a.prefill_lines)}],
+                                             "chat_template_kwargs": {"reasoning_effort": "low"}})["prompt"]
         R["prompts"] = prompts
+        prefill_res = None
         def timeleft():
             return not STOP["flag"] and time.time() - t_start < (a.max_min - 10) * 60
         if "speed" in tests:
@@ -335,15 +358,19 @@ def main():
                 R["speed"][k] = r
                 log("  %-9s tg %6.2f pp %6.1f gen %d draft %d/%d %s" % (k, r["tg"], r["pp"], r["ng"], r["da"], r["dn"], r.get("vs_ref", "")))
         if "prefill" in tests and timeleft():
-            r = complete(prompts["long"], 16)
-            R["prefill"] = {"pp": round(r["pp"], 2), "prompt_n": r["np"]}
-            log("  prefill %.2f t/s over %d tokens" % (r["pp"], r["np"]))
+            r = complete(longp, 32, cache=True)
+            R["prefill"] = {"pp": round(r["pp"], 2), "prompt_n": r["np"], "tg_at_depth": round(r["tg"], 2)}
+            prefill_res = r
+            log("  prefill %.2f t/s over %d tokens, then decode %.2f t/s at that depth" % (r["pp"], r["np"], r["tg"]))
         if "cache" in tests and timeleft():
             R["cache"] = cache_test(out + "/server.log")
             log("  cache: %s" % R["cache"])
         if "par" in tests and timeleft():
             R["par"] = par_test(prompts["prose"])
             log("  parallel: %s" % R["par"])
+        if "slot" in tests and timeleft():
+            R["slot"] = slot_test(longp, prefill_res)
+            log("  slot save/restore: %s" % R["slot"])
         if "qual" in tests and timeleft():
             R["qual"] = []
             for i, (q, rx) in enumerate(QUAL):
@@ -396,7 +423,8 @@ def summary(R):
             L.append("reference re-run identical: %d/%d%s" % (sum(1 for k in sp if sp[k].get("rerun_same")), len(sp),
                      " | saved as reference " + R["ref_saved"] if R.get("ref_saved") else " | reference NOT saved"))
     if "prefill" in R:
-        L.append("prefill %.2f t/s over %d tokens" % (R["prefill"]["pp"], R["prefill"]["prompt_n"]))
+        L.append("prefill %.2f t/s over %d tokens | decode after it %.2f t/s" % (R["prefill"]["pp"], R["prefill"]["prompt_n"],
+                 R["prefill"].get("tg_at_depth", 0)))
     if "cache" in R:
         c = R["cache"]
         L.append("prompt cache: processed/total per turn %s | full re-processing lines %d | checkpoint restores %d, created %d (largest %.1f MiB) | %s" % (
@@ -404,6 +432,10 @@ def summary(R):
             c["checkpoints"][1], "PASS" if c["pass"] else "FAIL"))
     if "par" in R:
         L.append("2 slots: single %s t/s, two at once %s t/s total" % (R["par"]["single_tg"], R["par"]["two_aggregate_tg"]))
+    if "slot" in R:
+        x = R["slot"]
+        L.append("slot: first prefill %s s for %s tokens | save %s s, %s GiB | restore %s s | after restore %s tokens in %s s | same answer %s" % (
+            x["prefill_s"], x["tokens"], x["save_s"], x["gib"], x["restore_s"], x["after_restore_prompt_n"], x["after_restore_prompt_s"], x["same_answer"]))
     if "qual" in R:
         L.append("quality set: %d/%d correct" % (sum(q["ok"] for q in R["qual"]), len(R["qual"])))
     if "jarvis_before" in R:
@@ -544,5 +576,5 @@ if __name__ == "__main__":
     main()
 GGUF_BYTES_END
 for f in ~/speed/scripts/cpu_test.py ~/speed/scripts/gguf_bytes.py; do echo "$(basename $f): $(wc -l < $f) lines, $(wc -c < $f) bytes, $(sha256sum $f | cut -c1-16)"; done
-# expected: cpu_test.py: 424 lines, 24008 bytes, fafddf31f68f9b66
+# expected: cpu_test.py: 456 lines, 26652 bytes, cd62e4e24030dc1e
 # expected: gguf_bytes.py: 115 lines, 6059 bytes, ef47398d2254c477
