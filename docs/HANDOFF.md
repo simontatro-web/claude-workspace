@@ -96,6 +96,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 
 - Simon's full orchestrator wants received 2026-09-25: docs/orchestrator-wants-simon-2026-09-25.md (+ .docx). Role tests derived from them added to docs/benchmark-campaign.md.
 
+- Simon approved (2026-09-25): (1) interleave-beside-Jarvis test, docs/bench/il-beside.py -> ~/bench/il-beside.py (98 lines, 4946 B, 95e32f924b835a10), auto-stops if Jarvis < 75% of baseline twice; run after mtp-test. (2) clone ik_llama.cpp to ~/ik_llama.cpp and check qwen4exp support (no build until the queue is done).
 - Master speed-lever list: docs/speed-levers.md (Simon: "speed up in ANY and EVERY possible way").
 
 ## Next steps, in order
