@@ -59,7 +59,7 @@ rows, baseline = [], {}
 env = dict(os.environ, CUDA_VISIBLE_DEVICES="")
 for name, draft, nmax in CONFIGS:
     cmd = ["/usr/bin/numactl", "--cpunodebind=1", "--membind=1", BIN, "-m", MODEL, "-lm", "dio", "-lzm", "off",
-           "-ngl", "0", "-t", "18", "-c", "16384", "--parallel", "1", "--jinja",
+           "-ngl", "0", "-t", "12", "-tb", "36", "-c", "16384", "--parallel", "1", "--jinja",
            "--host", "127.0.0.1", "--port", str(PORT)]
     if draft:
         cmd += ["-md", MTP + draft, "--spec-type", "draft-mtp", "--spec-draft-n-max", str(nmax)]

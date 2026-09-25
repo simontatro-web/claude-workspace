@@ -39,6 +39,25 @@ Night 1 on GLM-5.3 measured llama.cpp reaching ~62% of STREAM. With ~3.7 GB read
 | decode tg128 | **4.10** |
 Below the 5-6 t/s estimate. 4.10 t/s x ~3.7 GB/token (ESTIMATE) = ~15 GB/s, about 51% of socket-1 STREAM (29.5 GB/s); either llama.cpp reaches less of the bandwidth on this model or it reads more bytes per token than estimated. Still ~3.7x GLM-5.3's 1.11 t/s beside Jarvis. Load + 3 reps took 5 min.
 
+### Day-1 flag sweep (socket 1 only, beside Jarvis) - MEASURED 2026-09-25 12:42-4:19 PM CT
+Threads (fn-a1):
+| threads | 9 | 12 | 16 | 18 | 36 |
+|---|---|---|---|---|---|
+| prefill pp512 | 16.94 | 22.01 | 28.01 | 29.35 | **31.67** |
+| decode tg128 | **4.38** | 4.32 | 4.19 | 4.17 | 3.93 |
+FEWER threads decode FASTER (9 beats 18 by 5%): decode is bandwidth-bound and extra threads add contention. Prefill wants all 36 hyperthreads (+8% over 18). So in llama-server use -t ~9-12 for decode and -tb 36 for prefill. 6/8/10 not yet tried.
+Prompt batch (fn-a2, pp4096, 18 threads): ubatch 512 27.79 / 1024 26.59 / 2048 26.28 / 4096 25.34. Default 512 is best; bigger is slower here.
+Hyperthreads for a 4K prompt (fn-a2b): 18 threads 26.22, 36 threads 28.84 (+10%).
+Flash attention (fn-a3): depth 0 identical; at 8K depth decode 4.01 on vs 3.88 off (+3%), prefill 23.25 on vs 24.31 off (-4%). Near neutral; on for decode-heavy use.
+8-bit K/V cache (fn-a5, fa on): 29.03 / 4.16 at depth 0, 24.47 / 3.98 at 8K: no speed cost vs f16. Halves cache RAM; quality effect not measured.
+Depth (fn-a6, 18 threads, fa auto):
+| depth | 0 | 16K | 32K | 64K |
+|---|---|---|---|---|
+| prefill pp512 | 29.35 | 20.60 | 16.20 | 10.66 |
+| decode tg128 | 4.17 | 3.87 | 3.58 | 2.91 |
+Decode loses only 30% by 64K (GLM-5.3 lost 33% by 16K). Filling a 64K prompt takes ~70 min on socket 1 (the 64K job took 77 min including load); 16K ~11 min. Long context is practical on this model, slowly.
+Best single-socket stock config so far: -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
+
 ## Commands kept for later
 Build the MTP PR (only after "Benchmark queue finished"; CPU-only; production untouched):
 ```

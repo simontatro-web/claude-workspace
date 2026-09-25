@@ -11,7 +11,7 @@ LIMIT = 0.75          # stop if Jarvis drops below 75% of its baseline speed twi
 PROBE_EVERY = 60      # seconds between Jarvis probes during the benchmark
 BENCH = "/home/simon/llama.cpp/build/bin/llama-bench"
 MODEL = "/home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf"
-ARGS = ["-m", MODEL, "-lm", "dio", "-lzm", "off", "-ngl", "0", "-t", "36,32", "-p", "512", "-n", "128", "-r", "3"]
+ARGS = ["-m", MODEL, "-lm", "dio", "-lzm", "off", "-ngl", "0", "-t", "12,18,24,36", "-p", "512", "-n", "128", "-r", "3"]
 UNIT = "bench-fn-il-beside"
 PROBE = {"messages": [{"role": "user", "content": "List the planets of the solar system in order from the Sun, with one short fact about each."}],
          "temperature": 0, "max_tokens": 200, "cache_prompt": False}
