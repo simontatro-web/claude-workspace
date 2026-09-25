@@ -9,8 +9,8 @@
 # and is always started again at the end, even if this script fails or is stopped.
 set -u
 B=/home/simon/bench
-Q=$B/queue.txt; DONE=$B/queue.done; FAILED=$B/queue.failed; LOG=$B/queue.log; STOP=$B/STOP
-BIN=/home/simon/llama.cpp/build/bin/llama-bench
+Q=${BENCH_QUEUE:-$B/queue.txt}; DONE=$B/queue.done; FAILED=$B/queue.failed; LOG=$B/queue.log; STOP=$B/STOP
+BIN=${BENCH_BIN:-/home/simon/llama.cpp/build/bin/llama-bench}; OUTFMT=${BENCH_OUT:-jsonl}
 TZNAME=America/Chicago
 WIN_START=1; WIN_END=7        # local hours when Jarvis may be stopped
 MAX_OFF_MIN=300               # longest Jarvis may be down in one night
@@ -72,6 +72,7 @@ run_job() {  # label profile hours args...
     cpu1)  numa=(--cpunodebind=1 --membind=1) ;;
     cpu)   numa=(--preferred=1) ;;
     cpuil) numa=(--interleave=all) ;;
+    cpuilj) numa=(--interleave=all) ;;  # both sockets, allowed beside Jarvis
     gpu)   numa=(--interleave=all); envs=() ;;
     *) log "FAILED $label: unknown profile $profile"; echo "$label" >> "$FAILED"; return ;;
   esac
@@ -86,7 +87,7 @@ run_job() {  # label profile hours args...
     -p MemoryMax="$MEMMAX" -p MemorySwapMax=0 -p OOMScoreAdjust=1000 \
     -p RuntimeMaxSec=$((hours * 3600)) \
     -p StandardOutput=append:"$out/$ts.jsonl" -p StandardError=append:"$out/$ts.log" \
-    "${envs[@]}" /usr/bin/numactl "${numa[@]}" "$BIN" -o jsonl "$@"
+    "${envs[@]}" /usr/bin/numactl "${numa[@]}" "$BIN" -o "$OUTFMT" "$@"
   local rc=$? mins=$(( ($(date +%s) - t0) / 60 ))
   CUR_UNIT=""
   if [ $rc -eq 0 ]; then log "DONE $label in ${mins} min"; echo "$label" >> "$DONE"

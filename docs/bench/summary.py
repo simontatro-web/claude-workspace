@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 # Prints a table from llama-bench jsonl results. Columns = the settings that vary between tests.
 # Usage: python3 ~/bench/summary.py ~/bench/results/<label>/*.jsonl
+# Also reads ik_llama.cpp's "-o json" output (one JSON array per file).
 import json, sys
 rows = []
 for path in sys.argv[1:]:
-    for line in open(path, errors="replace"):
+    text = open(path, errors="replace").read()
+    start = text.find("[")
+    if start != -1 and not text.lstrip().startswith("{"):
+        try:
+            rows.extend(r for r in json.loads(text[start:text.rfind("]") + 1]) if isinstance(r, dict))
+            continue
+        except ValueError:
+            pass
+    for line in text.splitlines():
         line = line.strip()
         if line.startswith("{"):
             try:

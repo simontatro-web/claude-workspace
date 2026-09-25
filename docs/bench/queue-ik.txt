@@ -1,0 +1,14 @@
+# ik_llama.cpp head-to-head on Qwen3.8-Flash-Next UD-Q4_K_XL. Run with BENCH_BIN=ik llama-bench, BENCH_OUT=json, BENCH_QUEUE=this file.
+# Compare with the stock fn-* results (stock socket 1: 4.10 t/s tg128 / 29.35 pp512 at 18 threads; best 4.38 at 9 threads).
+# cpu1 = socket 1 only beside Jarvis. cpuilj = both sockets interleaved, beside Jarvis (short jobs; Jarvis may slow a few % meanwhile).
+ik-fn-a0-baseline cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 18 -p 512 -n 128 -r 3
+ik-fn-a1-threads cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 9,12,18 -p 512 -n 128 -r 2
+ik-fn-a2-rtr cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -rtr 0,1 -p 512 -n 128 -r 2
+ik-fn-a3-fmoe cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -fmoe 0,1 -p 512 -n 128 -r 2
+ik-fn-a4-ger cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -ger 0,1 -p 512 -n 128 -r 2
+ik-fn-a5-thp cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -thp 0,1 -p 512 -n 128 -r 2
+ik-fn-a6-muge cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -muge 1 -p 512 -n 128 -r 2
+ik-fn-a7-depth cpu1 3 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12 -p 0 -n 0 -gp 16384,128 -gp 32768,128 -r 1
+ik-fn-b1-il cpuilj 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 12,18,24 -p 512 -n 128 -r 2
+ik-fn-b2-il-prefill cpuilj 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 36,72 -p 512 -n 0 -r 2
+ik-fn-a0-baseline-end cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -mmp 0 -ngl 0 -t 18 -p 512 -n 128 -r 3
