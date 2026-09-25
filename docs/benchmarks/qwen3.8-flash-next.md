@@ -66,7 +66,7 @@ Day-1 queue finished 4:33 PM CT; fn-b1-interleave and fn-b1-threads-il (Jarvis o
 | shared-Q8 n-max 1 | 5.58 | 5.15 | 5.43 | 147/152, 117/140, 80/90 |
 | shared-Q8 n-max 2 | 6.26 | 5.48 | 5.40 | 193/210, 156/204, 99/140 |
 | shared-Q8 n-max 3 | **7.62** (1.78x) | 6.44 | 6.14 | 219/239, 177/243, 112/174 |
-EVERY MTP output is DIFFERENT from MTP off, even n-max 1. Not yet known whether this is benign (batched verification changes floating-point results, flipping near-tie tokens late in the text) or the PR's divergence bug. Checking where the texts diverge before trusting any MTP number. Model load ~190 s per server start.
+EVERY MTP output is DIFFERENT from MTP off, even n-max 1. Not yet known whether this is benign (batched verification changes floating-point results, flipping near-tie tokens late in the text) or the PR's divergence bug. Divergence check (MEASURED): every MTP config first differs from MTP off at the SAME character (reasoning 113 of ~697, copy 349 of ~1174, prose 315 of ~885), at a near-tie word choice ("Arrive stop at 12:10" vs "Arrive 12:10"; "the refrigerator" vs "the fridge"; "appears as variable in" vs "appears in"). Both versions stay coherent and the reasoning reaches the same correct intermediate times (12:10, 12:35). Reading: benign numeric difference between single-token decode and batched draft verification, NOT the PR's n-max >= 3 divergence bug (it happens identically at n-max 1). Still to confirm: MTP configs identical to each other, and MTP off identical to itself run to run; quality equivalence on the quality suite. Model load ~190 s per server start.
 
 Best single-socket stock config so far: -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
 
