@@ -2,3 +2,4 @@ events.jsonl*
 state.json*
 __pycache__/
 .pytest_cache/
+resumes.json*

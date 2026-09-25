@@ -983,3 +983,18 @@ def test_R12_task_requests_still_skipped(mkproxy, gitrepo):
     post(base, body)
     assert last_fwd() == body
     assert wait_events(cfg, 1)[-1]["action"] == "skip"
+
+
+def test_every_state_file_is_gitignored(mkproxy, tmp_path):
+    """Files the proxy writes must never show in `git status` (the autopilot's DONE needs a clean tree)."""
+    import fnmatch
+    pats = [ln.strip() for ln in open(os.path.join(os.path.dirname(HERE), ".gitignore")) if ln.strip()]
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, events_max_bytes=200)
+    for i in range(6):
+        post(base, {"model": "m", "messages": [msg("system", 50), msg("user", 20, word=f"chat{i}")]})
+    _compact_once(base, cfg)
+    wait_events(cfg, 7)
+    written = sorted(os.listdir(cfg.state_dir))
+    assert {"state.json", "resumes.json", "events.jsonl", "events.jsonl.1"} <= set(written), written
+    for name in written + ["state.json.tmp", "resumes.json.tmp"]:
+        assert any(fnmatch.fnmatch(name, p) for p in pats), f"{name} is not in ctxproxy/.gitignore"

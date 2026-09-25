@@ -42,7 +42,7 @@ yourself in this repo; Simon runs everything on the box and pastes you the outpu
   by something else; the file on disk is current.
 - docs/jarvis-build/: the build handoff Jarvis reads (00-START-HERE, 01-steps, specs 02-10).
 - docs/jarvis-build/ctxproxy/: the J3 context proxy v2.1, BUILT BY CLAUDE and tested off-box:
-  proxy.py, tests/ (63 tests, fake llama-server), smoke_real.py (8 real-server checks), report.py (events
+  proxy.py, tests/ (64 tests, fake llama-server), smoke_real.py (8 real-server checks), report.py (events
   summary, suggests RESERVE), live/setup_task.py + check_task.py (25-edit acceptance task and grader),
   ctxproxy.service, README.md (the install and acceptance runbook; read it first).
 - docs/jarvis-build/autopilot/: BUILT BY CLAUDE. autopilot.py runs one approved task with nobody typing
@@ -55,8 +55,10 @@ yourself in this repo; Simon runs everything on the box and pastes you the outpu
 - docs/jarvis-build/07-builder-prompt.md is Builder prompt v2 (STATUS: DONE/BLOCKED lines, no turn budget,
   NEW CHAT START / CONTEXT HIGH / CONTEXT COMPACTED rules, AUTOPILOT meaning). The autopilot reads it from
   ~/jarvis-build/handoff/07-builder-prompt.md, so the chat preset and the autopilot share one prompt.
-- docs/jarvis-build/jarvis-build-bundle.tgz: what Simon installs (replaces ctxproxy-bundle.tgz, removed);
-  sha256 80ee0c6fd046bdeeaf1f5aa008ff22afb87984fc1e935060bb1753a4c7e76697. Contains ctxproxy/, autopilot/,
+- docs/jarvis-build/jarvis-build-bundle.tgz: the current bundle, sha256
+  0402e2701496ca565ef09a61d62b18d8243c7a28df754912ee65d2dacd3b7ef1 (195 tests: adds resumes.json to
+  ctxproxy/.gitignore and drops the schoolwork line from handoff/07). Simon installed the previous one,
+  80ee0c6f, and applied those two changes on the box by hand (sed + one .gitignore line). Contains ctxproxy/, autopilot/,
   handoff/00-START-HERE.md, 01-steps.md, 07-builder-prompt.md, 09-spec-context-compactor.md. Rebuild it the
   same way (staging dir, no __pycache__, files 644 except autopilot/jarvis-autopilot 755, tar --sort=name
   --mtime='2026-09-25 00:00Z' --owner=0 --group=0 --numeric-owner), re-run both suites from a clean extract,
@@ -82,8 +84,7 @@ Next: ctxproxy/README.md step 5 (service), step 6 (Open WebUI + Builder prompt v
 Before the first `jarvis-autopilot next-step`: clear the 4 untracked leftovers in ~/jarvis-build (log lists them).
 Simon's choice (2026-09-25): the line "Never do Simon's graded schoolwork." is removed from the Builder prompt
 (07-builder-prompt.md; Open WebUI's live Builder prompt already lacks it). jarvis-build-bundle.tgz (80ee0c6f, the
-installed one) still has it in handoff/07: rebuild the bundle with the next change. 00-START-HERE.md keeps the
-line (Simon: no).
+installed one) still had it; the current bundle 0402e270 does not. 00-START-HERE.md keeps the line (Simon: no).
 
 ## Where things stand (end of the last session, 2026-09-25 evening Chicago)
 Simon asked for Jarvis to continue automatically with no "continue" from him; he is away from his computer and

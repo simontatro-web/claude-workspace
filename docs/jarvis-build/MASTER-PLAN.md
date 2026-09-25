@@ -190,6 +190,11 @@ New wants: Claude adds a row here and places it in a stage before anyone builds 
 Done: D3 (USB first), D4, D22 (MEASURED 2026-09-25). Standing: D18, benchmarks keep the 1-7 AM window.
 
 ## 6. Status log (newest first; one line per change, with its proof)
+- 2026-09-25: fix: ctxproxy/.gitignore lacked resumes.json (the new-chat state file), which would block every
+  autopilot DONE in ~/jarvis-build (clean tree required, seatbelt forbids ctxproxy/ writes). New test proves every
+  state file is ignored. Bundle 0402e270, 195 passed from a clean extract (MEASURED, Claude's sandbox). The
+  installed box gets the one-line fix by hand. A3 step 1 done (MEASURED): jarvis-autopilot installed; tool key
+  in /home/simon/.config/jarvis/run-host-commands.env (EnvironmentFile of the tool server).
 - 2026-09-25 (MEASURED, Simon's pastes): A2 mostly done. jarvis-ctxproxy active on 172.17.0.1:8090, health OK
   from host and the open-webui container. Builder -> proxy.<model>: a new chat got the NEW CHAT START note
   (resume new -> sticky, 116 of 10,638 tokens re-read) and git facts work inside the service. Found and fixed:

@@ -52,7 +52,7 @@ touch STRESS-PLAN.md.
 
     cd ~/jarvis-build && venv/bin/python -m pytest -q -p no:cacheprovider ctxproxy/tests autopilot/tests
 
-Expect `194 passed` (63 proxy + 131 autopilot). Anything else: stop and paste the output to Claude.
+Expect `195 passed` (64 proxy + 131 autopilot). Anything else: stop and paste the output to Claude.
 
 ## 4. Real-server smoke test (uses llama-server for 1-3 minutes; changes nothing)
 Do this when no Jarvis chat is running.
