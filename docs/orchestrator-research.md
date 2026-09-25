@@ -202,7 +202,8 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
 | V25 | Where the NVIDIA driver packages come from | `dpkg -l \| grep -E '^ii +(nvidia-driver\|nvidia-dkms\|libnvidia-compute)' \| head; apt-cache policy nvidia-driver-580 2>/dev/null \| head -12` |
 | ~~V26~~ | done: PMC/PubMed presence; ZIM integrity; model folders complete | `ls -la /mnt/models/models/corpus/refs /mnt/models/models/corpus/ted /mnt/models/models/data/research 2>&1 \| head -60; ls -la /mnt/models/models/verify/HHEM-2.1-open /mnt/models/models/verify/prompt-injection-deberta 2>&1 \| head -40` |
 | ~~V27~~ | done: which CUDA/NVIDIA packages are installed and what `apt upgrade` would change; what owns `/usr/sbin/lxc` | `dpkg -l \| grep -E '^ii +(cuda\|nvidia\|libnvidia)' \| awk '{print $2, $3}' \| head -40; apt list --upgradable 2>/dev/null \| grep -i -E 'nvidia\|cuda'; dpkg -S /usr/sbin/lxc` |
-| V28 | What `/usr/sbin/lxc` is (a binary, a script or a link), without running it | `ls -l /usr/sbin/lxc /usr/sbin/lxd 2>&1; file /usr/sbin/lxc; readlink -f /usr/sbin/lxc` |
+| ~~V28~~ | done: `/usr/sbin/lxc` and `/usr/sbin/lxd` are identical 589-byte POSIX shell scripts, root-owned, dated May 7 2024. That matches the Ubuntu 24.04 `lxd-installer` stub, which installs the LXD snap when first run. It is still unowned per `dpkg -S` (VERIFY V29). Latent root path confirmed plausible; D22 stands. | (was) what `/usr/sbin/lxc` is | `ls -l /usr/sbin/lxc /usr/sbin/lxd 2>&1; file /usr/sbin/lxc; readlink -f /usr/sbin/lxc` |
+| V29 | Read the stub (never execute it) and check the installer package | `cat /usr/sbin/lxc; dpkg -l lxd-installer 2>&1 \| tail -2; dpkg -S lxd 2>&1 \| head -5` |
 
 
 ## 2. The spine: one structure that makes the wants enforceable
