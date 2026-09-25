@@ -190,6 +190,13 @@ New wants: Claude adds a row here and places it in a stage before anyone builds 
 Done: D3 (USB first), D4, D22 (MEASURED 2026-09-25). Standing: D18, benchmarks keep the 1-7 AM window.
 
 ## 6. Status log (newest first; one line per change, with its proof)
+- 2026-09-25 (MEASURED, Simon's pastes): A2 mostly done. jarvis-ctxproxy active on 172.17.0.1:8090, health OK
+  from host and the open-webui container. Builder -> proxy.<model>: a new chat got the NEW CHAT START note
+  (resume new -> sticky, 116 of 10,638 tokens re-read) and git facts work inside the service. Found and fixed:
+  stale RESUME HERE ("build proxy.py") replaced (commit f4b84b1); Builder had builtin_tools on (fixed cost
+  9,803 tokens) -> off: a new chat's 2nd request is now 4,636 tokens (ours +1.8% vs llama-server). Open WebUI DB:
+  context_watch exists but is inactive (so plain Jarvis has no warning); no memories. Simon removed the
+  schoolwork line from the Builder prompt.
 - 2026-09-25 (MEASURED, Simon's paste): A1 done on jarvis-1. sha256 of jarvis-build-bundle.tgz matches;
   `194 passed in 62.89s`; commit "J3 v2.1 + autopilot 80ee0c6f, 194 pass" (23 files); smoke_real 8/8: C3 gaps
   +2.9/+2.0/+2.8% (over-counts, the safe side), M1 after compaction re-read 180-199 of ~11.8k tokens, new-chat
