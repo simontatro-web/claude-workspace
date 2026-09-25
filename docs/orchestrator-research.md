@@ -199,6 +199,8 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
 
 - **Jarvis S1 done (as reported by Jarvis, 2026-09-25 ~11:41 AM Central):** backup script, SQLite-safe snapshot, and T1-T4 passing against a local test repo; unit and timer written, not installed. **Review finding:** the unit runs as root but its script lives in `~/jarvis-build/backup/`, which Jarvis can edit. Installed like that, it would give Jarvis root code execution every night. Install a root-owned copy (`/usr/local/sbin` + `/etc/jarvis-backup/`, mode 600 config) and re-copy only after reviewing the diff.
 
+- **Jarvis S1b done and installed (2026-09-25):** context-watch filter (`~/jarvis-build/ctxfilter/context_watch.py`, 5/5 tests, commit `aee61cb`). Code reviewed by grep: imports only json, urllib.request, pydantic; its only URL is `/tokenize`. Simon installed it in Open WebUI as a filter on the Jarvis model.
+
 ### Remaining follow-up checks
 | # | Settles | Command |
 |---|---|---|
