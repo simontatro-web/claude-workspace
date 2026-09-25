@@ -18,6 +18,9 @@ Labels: MEASURED (on this box), SOURCE (read in llama.cpp code or docs by an ear
 - Decode is bandwidth-bound: ~24.8 GB read per token. MEASURED STREAM on this box: 29.5 GB/s one socket, 59.5 GB/s both sockets interleaved (after the uncore/governor fix). Realistic llama.cpp conversion is lower.
 - ESTIMATE: 1.5-2.5 t/s decode untuned on stock llama.cpp, 2.5-4 t/s with the levers below, ceiling ~5.
 
+## Results so far
+- 1a DONE 2026-09-25 [MEASURED]: the MTP head IS in the GGUF. Shard 11 carries 4 nextn tensors including blk.78.nextn.eh_proj.weight (the probe glm-dsa.cpp checks), and shard 1 has the glm-dsa.nextn_predict_layers key. MTP decoding (test 2c) is on the table with stock llama.cpp.
+
 ## Phase 1: Jarvis stays up, stock llama.cpp, CPU only (no downtime, no builds)
 | # | Test | How | What it decides |
 |---|------|-----|-----------------|
