@@ -56,6 +56,9 @@ Depth (fn-a6, 18 threads, fa auto):
 | prefill pp512 | 29.35 | 20.60 | 16.20 | 10.66 |
 | decode tg128 | 4.17 | 3.87 | 3.58 | 2.91 |
 Decode loses only 30% by 64K (GLM-5.3 lost 33% by 16K). Filling a 64K prompt takes ~70 min on socket 1 (the 64K job took 77 min including load); 16K ~11 min. Long context is practical on this model, slowly.
+Poll (fn-a7): 0/50/100 all 29.3 pp / 4.14-4.15 tg: no effect.
+Control (fn-a0-baseline-end, 4:33 PM): 29.42 / 4.19 vs 29.35 / 4.10 at 12:42 PM: box stable over the run (within 2%).
+Day-1 queue finished 4:33 PM CT; fn-b1-interleave and fn-b1-threads-il (Jarvis off) left for a night window.
 Best single-socket stock config so far: -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
 
 ## Commands kept for later

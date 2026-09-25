@@ -98,6 +98,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 
 - Simon approved (2026-09-25): (1) interleave-beside-Jarvis test, docs/bench/il-beside.py -> ~/bench/il-beside.py (98 lines, 4946 B, 95e32f924b835a10), auto-stops if Jarvis < 75% of baseline twice; run after mtp-test. (2) ik_llama.cpp CLONED ~/ik_llama.cpp at 1aaf7105 (2026-09-25): qwen4exp supported (grep). Build after the Flash-Next queue. il-beside.py saved and checksum-confirmed. ik: fused MoE default on, -fdn fused delta-net exists, qwen4exp NextN companion-file support, no NUMA mirror option.
 - Flash-Next day-1 sweep MEASURED (see docs/benchmarks/qwen3.8-flash-next.md): decode best at 9 threads (4.38), prefill best at 36 (31.67); ub 512 best; fa ~neutral; q8_0 cache free; 64K depth decode 2.91, prefill 10.66. Harness tweaks after it: il-beside.py threads -> 12,18,24,36 (98 lines, 4952 B, cfd7d818bcc8da46); mtp-test.py -> -t 12 -tb 36 (109 lines, 5907 B, 3e55580b5ff38e57), applied on the box with sed.
+- Flash-Next day-1 queue FINISHED 4:33 PM CT (poll no effect; end control 4.19 t/s, stable). Harness sed updates applied and checksums confirmed on the box. mtp-test STARTED 4:39 PM CT (unit mtp-test). After it: il-beside, then build-ik.
 - Master speed-lever list: docs/speed-levers.md (Simon: "speed up in ANY and EVERY possible way").
 
 ## Next steps, in order
