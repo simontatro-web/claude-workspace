@@ -809,3 +809,109 @@ Each one reads only. None starts, stops, installs, writes or edits anything. Bes
 | V20 | GLM-5.3 load time from NVMe (if the glm-test server was ever started) | `journalctl -u glm-test --no-pager \| grep -i -E "load time\|loaded\|listening" \| head` |
 | V21 | Open WebUI web search backend | Look only: Admin → Settings → Web Search |
 | V22 | D2L calendar feed / Gmail app passwords | In your browser: D2L Calendar → Subscribe; Google Account → Security → App passwords (look, don't create) |
+
+---
+
+## 8. Summary table
+
+Effort estimates (ESTIMATE):
+- **S** = one evening
+- **M** = a few evenings
+- **L** = weeks
+
+These assume Jarvis writes most of the code from Claude-written specs, with you pasting root-level steps.
+
+| Want | Have | Need | Recommended approach | Effort | Blockers |
+|---|---|---|---|---|---|
+| N1 Spec interview, 100% | 27B; Sep 14 approvals design; interview spec pattern | Gate, checklists, restatement check, comprehension quiz | Database gate + worker check + approval only via your credential; checklist-driven interview saved per turn; echo check in code; fresh-model quiz | M | Fences (D1) so the model can't write the DB; job spine |
+| N2 Self build/improve | create_tool, write_file, GVS5H proven | Sandbox, promotion step, scorer | Self-change = job type: spec → sandbox → tests → approval → promote with backup | M | N1, fences, scorer |
+| N3 Fresh-context big-model jobs | GLM-5.3 measured; Flash-Next copied | Executor, briefs, artifacts | Worker builds a brief, one fresh call, stores the artifact, runs tests; GLM single-shot only | M | Flash-Next numbers; llama-swap |
+| N4 Any model on demand, incl. MiMo from HDD | All files; `-lm dio`; systemd-run pattern | llama-swap, admission controller, `models` table, resource requests | llama-swap wrapping systemd-run; controller enforces RAM/GPU/power rules; MiMo only as an approved Jarvis-off event | M (MiMo: L) | MiMo join needs ~519 GiB of disk; Jarvis off |
+| N5 Always-on RSI | Mutation half; bench queue | Unwritable scorer, held-out set, lineage, caps | `jarvis-eval` user; promptfoo + KLD baselines; GEPA on prompts first; approval to promote | L | Fences; the scorer must catch a planted regression first |
+| N6 Deep research overnight | Research spec; web_search; possibly local corpora | Crawl worker, claim table, gates, search API | Build to RESEARCH-SPEC (or start with local-deep-research); Tavily + Brave credits + Serper; GLM synthesis at night | M-L | Search accounts; Flash-Next speed; groundedness checker on drive |
+| N7 Tools like the YouTube finder | Learning protocol; ACT pack | `skills` table, YouTube API key, transcripts, reranker | Misconception → search → transcript grounding → 27B check → 1-3 timestamped picks | M | Google Cloud project; your graded work as input |
+| N8 Fast front desk | 27B; Sep 14 job API design | Read-only status tools, a reasoning-off preset | Database answers, model phrases; `/status` with no model at all | S (after spine) | Job spine; V10 (per-request reasoning) |
+| N9 New-model watcher | hf_model_sizes; watch list | Pollers, fit checker, digest | Code-only fit tiers from measured constants; weekly digest; fast-house manifest | S-M | None major |
+| N10 Human-speed voice | Open WebUI voice mode; ASR on drive | Streaming pipeline; fast speech-to-text and text-to-speech; freed GPU | Pipecat + Moonshine/Parakeet + Kokoro; reasoning off; GPU after the re-layout | M | Freed GPU for sub-1.3 s; sub-500 ms not possible |
+| N11 Accounts and life | Nothing live | Connectors, credential broker, approvals | Read-only connectors first; sends via approvals; trust graduation | M per account | Gmail OAuth 7-day trap; Cengage bot risk (D11) |
+| N12 Control room | Design from W4 | `events` table, SSE page | Everything writes events; single page on the tailnet; Phoenix optional later | M | Job spine |
+| N13 Review loop + phone approvals | GVS5H grounding insight | Grounded checks per type, reviewer, approvals push | Build → checks → other-family reviewer (fresh, spec-only) → fixes auto / suggestions to phone; caps | M-L | GLM speed; GLM-5.3-Flash fork build |
+| N14 Never break | Good unit habits; output cap | Users/permissions, bind fix, backups, watchdog, kill switch, holds | Section 2.1 fences + N14 table | M | Your decisions D1-D4 |
+| N15 No hallucinations, smooth | Output cap; native function calling | Database-only status; groundedness gate; regression suites | Section N15 controls table | M | Checker on drive (V7) |
+| W1-W24 | See section 4 | See section 4 | See section 4 | varies | Mostly the spine + fences |
+| Schoolwork tracker | Nothing live | Scraper/feeds, deadlines table, ntfy | Its own isolated unit; Cengage > D2L precedence; read-only | S-M | D11 (scrape risk); feeds |
+
+---
+
+## 9. Decisions you need to make
+
+| # | Decision | Options | Recommendation |
+|---|---|---|---|
+| D1 | The permission fence | (a) keep Jarvis's shell as `simon` (today); (b) move it to a new `jarvis` user with full control of its own home and memory, no sudo | (b). It is what makes "never break", the spec gate and the unwritable scorer real. Also decide what of `/home/simon` `jarvis` may **read** (e.g. `~/bench/results`, `~/models` read-only). |
+| D2 | Network exposure | Tool server `0.0.0.0` → `172.17.0.1`; llama-server 8080 and Open WebUI 3000 LAN-wide vs local + Tailscale only | Bind the tool server now. Check V2 before deciding on 8080/3000. |
+| D3 | Off-box backup target | Backblaze B2 now (restic, encrypted); NAS (ESC4000) later; both | Both: B2 now (pennies for configs, databases, memory, units); NAS as the second copy once it has caddies. Keep the restic password somewhere off the box. |
+| D4 | Freeze the GPU stack | `apt-mark hold` the NVIDIA driver (and kernel, unless DKMS rebuilds are proven) | Hold. Driver 580 is the last branch for Volta. |
+| D5 | HF token on the model drive | Revoke and re-issue, or keep | Revoke (it is plain text and readable by any user). |
+| D6 | Notifications | ntfy.sh public topic (as Sep 14) vs self-hosted ntfy + upstream for iOS | Self-hosted, auth deny-all; approvals via one-time tokens. |
+| D7 | Frontier top rung | None / Claude API or similar with a hard monthly cap | A cap of ~$10-15/month inside your $25, used only for audits of syntheses and truly stuck jobs. |
+| D8 | Search APIs | Tavily (free 1,000/month, no card); Serper (2,500 free); Brave ($5 credit, card required) | Tavily + Serper first; add Brave only if you accept a card on file. |
+| D9 | Interview rules | Which job types get "express" checklists; the echo threshold; whether voice may start interviews | Express for timer-class tasks only; voice may start but never skip. |
+| D10 | First accounts to connect, and how | Gmail via IMAP app password vs OAuth; calendar via secret iCal URL | Read-only IMAP + iCal first; sending later through approvals. |
+| D11 | School portals | D2L feed if it works; Cengage scraping (bot-detection risk) or manual | D2L feed; Cengage once daily read-only only if you accept the risk, otherwise you paste the list. |
+| D12 | MiMo | Pursue (needs disk and Jarvis-off windows) or park | Park until the other big-model numbers are in; if pursued, the cheapest disk is an internal recertified SATA HDD (section 10). |
+| D13 | Who gets the freed GPU (if the single-card 27B A/B passes) | Voice; uncensored; video; fine-tuning; Qwen3-VL-32B | Voice resident; the others in scheduled windows. |
+| D14 | RSI scope | Prompts only; + flags via the bench queue; + sandboxed code | Prompts first. Code only after the scorer catches a planted regression. Every promotion needs your approval. |
+| D15 | Build order vs the schoolwork tracker | Tracker right after the spine, or later | Right after the spine (real deadlines). |
+| D16 | System prompt safety sections 13/14/19 | Restore in Open WebUI | Restore (still pending from Part 5). Prompts don't enforce, but they reduce how often the fences have to. |
+| D17 | Model drive at boot | fstab read-only with `nofail` | Yes (HANDOFF pending). |
+| D18 | Downtime windows | Share the 1-7 AM Central window between benchmarks and orchestrator heavy steps | Benchmarks keep priority; the orchestrator's early steps need no downtime. |
+| D19 | YouTube | Create a Google Cloud project + API key; approve a channel allow-list | Yes when N7 starts. |
+| D20 | n8n | Adopt as core / later for integrations / no | Not as the core; maybe later. |
+| D21 | Printer | Which 3D printer you bought (W12) | Tell me when W12 comes up. |
+
+---
+
+## 10. What to buy or download
+
+### Paid services (ceiling ~$25/month)
+| Item | Cost | Why | Label |
+|---|---|---|---|
+| Backblaze B2 (restic target) | $6.95/TB/month (raised from $6.00 in Mar 2026); egress free up to 3x stored. Configs + DBs + memory + units are likely <20 GB → **<$0.15/month** | Off-box backup (W19) | SOURCE: [B2 pricing](https://www.backblaze.com/cloud-storage/pricing), size ESTIMATE |
+| Tavily | Free 1,000 credits/month, no card; $0.008/credit after | Research search | SOURCE |
+| Serper | 2,500 free credits (6 months), then ~$1 per 1,000 | Research search | SOURCE |
+| Brave Search API | $5/month credit (~1,000 queries) free; card required; billed beyond | Optional third engine | SOURCE |
+| YouTube Data API | Free (100 searches/day) | N7 | SOURCE |
+| Frontier API top rung | Cap at ~$10-15/month | W9 audits | ESTIMATE; your decision D7 |
+| Pushover (only if ntfy's iOS approval bug annoys you) | $4.99 one-time per platform | Fallback approvals app | SOURCE: [pushover.net/pricing](https://pushover.net/pricing) |
+| **Expected monthly total** | **~$0.15-$15**, depending on D7 | | ESTIMATE |
+
+### Hardware (none required for the core plan)
+| Item | Cost | Why | Notes |
+|---|---|---|---|
+| Internal recertified CMR SATA HDD, 8-14 TB | historically ~$73-135 each (wiki, not verified live) | A home for the joined MiMo file (~557 GB), a cold model library, and an on-box backup tier (not off-box) | Uses a free SATA port. **VERIFY how the G2GPU12 chassis mounts and powers a 3.5" disk.** Never SMR. |
+| or a 2 TB NVMe with DRAM | e.g. Samsung 990 PRO 2 TB ~$338 on Amazon (Sep 2026); others lower | Faster MiMo loads (~2-3 min vs ~40-60 min from HDD) | SOURCE: [Tom's Hardware best SSDs](https://www.tomshardware.com/reviews/best-ssds,3891.html) listing; the board is PCIe 3.0, so a Gen4 drive gives no extra speed. Needs the $14.99 PCIe x4 adapter (wiki SKU 099994). Never DRAM-less (what-not-to-do #19). |
+| NAS caddies for the ESC4000 (ASUS 13GS1I0AM063-1) | VERIFY | The NAS as the second backup copy | Part 5 |
+| UPS | VERIFY | A clean shutdown on a power blip (the NVMe history) | The wiki says a 900 W unit is undersized (power-thermals-and-tuning) |
+| Optional: 2x Xeon E5-2699 v4 | ~$150-240 the pair (wiki; VERIFY live and board BIOS support) | Speed for every CPU model | Not needed for any want; a speed lever only |
+
+### Downloads (for a fast-house batch; sizes ESTIMATE unless marked)
+Check V6-V8 first. Several of these may already be on the drive from pull_orch / pull_research / pull_addendum.
+
+| Item | Size | For | Label |
+|---|---|---|---|
+| llama-swap release binary | ~15-30 MB | N4 model manager | ESTIMATE |
+| restic binary (if not installed) | ~25 MB | W19 | ESTIMATE |
+| ntfy server binary | ~30-40 MB | Section 2.6 | ESTIMATE |
+| Pipecat (pip) + faster-whisper/ctranslate2 + onnxruntime | ~0.5-2 GB with deps | N10 | ESTIMATE |
+| Moonshine (base) and/or Parakeet TDT 0.6B v3 | ~0.25 GB / ~0.6-2.5 GB | N10 speech-to-text | ESTIMATE |
+| Kokoro-82M + voices (if not on drive) | ~0.35 GB | N10 text-to-speech | ESTIMATE |
+| Speaches container image (optional alternative to Pipecat's local services) | ~2-5 GB | N10 | ESTIMATE |
+| HHEM-2.1-Open (if not on drive) | 438,535,352 B | N15 gate | SOURCE (wiki) |
+| MiniCheck-FT5 (optional second checker) | ~3 GB (770M params, fp32) | N15 | ESTIMATE |
+| protectai deberta-v3-base-prompt-injection-v2 (if not on drive) | ~0.74 GB | N11/N6 input filter | SOURCE (wiki) |
+| RAGTruth, SimpleQA-verified, FRAMES (if not on drive) | small (<1 GB total) | Calibrating the gate and research accuracy | ESTIMATE |
+| promptfoo (npm), lm-evaluation-harness (pip), GEPA (pip) | ~0.3-1 GB total | Scorer (N5) | ESTIMATE |
+| Arize Phoenix image (optional, later) | ~1-2 GB | N12 trace drill-down | ESTIMATE |
+| Python wheels for the job spine (fastapi, uvicorn, httpx are already in use; add pydantic, sse-starlette) | small | Spine | ESTIMATE |
+
+**No new big models are recommended now.** The next model decisions wait on the Flash-Next and llama-server-harness benchmarks.
