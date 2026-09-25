@@ -96,7 +96,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 
 - Simon's full orchestrator wants received 2026-09-25: docs/orchestrator-wants-simon-2026-09-25.md (+ .docx). Role tests derived from them added to docs/benchmark-campaign.md.
 
-- Simon approved (2026-09-25): (1) interleave-beside-Jarvis test, docs/bench/il-beside.py -> ~/bench/il-beside.py (98 lines, 4946 B, 95e32f924b835a10), auto-stops if Jarvis < 75% of baseline twice; run after mtp-test. (2) ik_llama.cpp CLONED ~/ik_llama.cpp at 1aaf7105 (2026-09-25): qwen4exp supported (grep). Build after the Flash-Next queue. il-beside.py checksum not yet confirmed by Simon.
+- Simon approved (2026-09-25): (1) interleave-beside-Jarvis test, docs/bench/il-beside.py -> ~/bench/il-beside.py (98 lines, 4946 B, 95e32f924b835a10), auto-stops if Jarvis < 75% of baseline twice; run after mtp-test. (2) ik_llama.cpp CLONED ~/ik_llama.cpp at 1aaf7105 (2026-09-25): qwen4exp supported (grep). Build after the Flash-Next queue. il-beside.py saved and checksum-confirmed. ik: fused MoE default on, -fdn fused delta-net exists, qwen4exp NextN companion-file support, no NUMA mirror option.
 - Master speed-lever list: docs/speed-levers.md (Simon: "speed up in ANY and EVERY possible way").
 
 ## Next steps, in order
