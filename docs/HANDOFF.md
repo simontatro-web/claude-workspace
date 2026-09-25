@@ -1,70 +1,103 @@
-# Handoff — Jarvis / jarvis-1 work (as of 2026-09-25 ~01:30 UTC)
+# Handoff: Jarvis / jarvis-1 work (as of 2026-09-25 ~14:10 UTC)
 
-You are picking up from a previous Claude Code session. Read this whole file before doing anything.
+You are picking up from earlier Claude Code sessions. Read this whole file before doing anything. Branch: `claude/new-session-uyo1y3` in simontatro-web/claude-workspace. Commit and push there.
 
-## Who and what
-- The user is **Simon**. Always call him Simon. Older notes (the Cowork memory pages in `docs/wiki/`) call him "Jack" — same person; never use "Jack" in anything you write for him or for Jarvis. ("Jackrong" is a Hugging Face uploader name, not him.)
-- **Jarvis** is Simon's local AI assistant: Qwen3.8-27B served by llama.cpp (`llama-server.service`, port 8080) on his home server **jarvis-1** (2x Tesla V100-PCIE-16GB, 2x Xeon E5-2699 v3, 503 GiB RAM, Ubuntu 24.04), used through Open WebUI (port 3000). Jarvis has an unrestricted shell tool server (port 8200) with endpoints run_host_command, write_file, read_file, save_finding, web_search, hf_model_sizes, create_tool, list_tools, plus plugins gpu_status, memory_search, sys_summary.
-- **You cannot reach jarvis-1.** Everything on the box goes through Simon: you write commands, he pastes them into an SSH terminal and pastes the output back. He also relays messages between you and Jarvis by hand.
+## Who and how
+- The user is **Simon**. Always call him Simon. Older notes (the Cowork memory pages in `docs/wiki/`, and files on his model drive) call him "Jack": same person, never use that name. "Jackrong" is a Hugging Face uploader, not him.
+- He is in US Central time (assumed from notes; the benchmark runner uses America/Chicago; not explicitly confirmed by him).
+- **Jarvis** is Simon's local AI assistant: Qwen3.8-27B Q4_K_M served by llama.cpp (`llama-server.service`, port 8080, both GPUs), used through Open WebUI (port 3000, docker). Jarvis has an unrestricted shell tool server (port 8200, bound to 0.0.0.0) with run_host_command, write_file, read_file, save_finding, web_search, hf_model_sizes, create_tool, list_tools, plus plugins gpu_status, memory_search, sys_summary.
+- **You cannot reach jarvis-1.** Give Simon commands to paste into its SSH terminal; he pastes the output back. He relays messages to Jarvis by hand.
+- Delivering files: terminal heredoc with a quoted, unique delimiter (`cat > FILE <<'X_END' ... X_END`), then verify with `wc -l`, `wc -c`, `sha256sum | cut -c1-16`. Compute the expected numbers in your own sandbox first and tell Simon what to expect. His terminal garbles the echo of long pastes; the file still lands intact: trust the checksum. Never deliver files through Jarvis's write_file (the 27B breaks tool-call JSON on long strings).
+- Long-running jobs on the box: always run them as systemd units (`sudo systemd-run --unit=NAME -p User=simon -p Group=simon ...`). nohup is NOT enough: rsync overrides SIGHUP and died when Simon's SSH session dropped. Simon's own computer does turn off.
 
-## Where everything is (this repo, branch `claude/new-session-uyo1y3`)
-If your session is on another branch: `git fetch origin claude/new-session-uyo1y3` and read the files from it (or check it out if you'll be committing there).
-- `docs/jarvis-briefing-2026-09-25.md` — Part 1-3 of the briefing written for Jarvis: the box, live server config, tools, rules, downloads, big-model run recipes, plans, dead ends, priorities.
-- `docs/jarvis-briefing-2026-09-25-part4.md` — what Simon wants (24 wants), hard boundaries, learning protocol, self-improvement plan, corrections to Part 1.
-- `docs/jarvis-briefing-2026-09-25-part5.md` — facts VERIFIED on the box by survey; wins over Parts 1-4 on conflicts.
-- `docs/jarvis-survey.sh` — read-only survey script (Simon has it at `~/jarvis-survey.sh`; output in `~/jarvis-survey.txt`).
-- `docs/wiki/` — 34 Cowork memory pages copied verbatim (index in `docs/wiki/README.md`). These are the source for everything in the briefing. `v100-hardware-and-models.md` = the Cowork page "local-model-landscape".
-- `docs/jarvis-progress.md`, `docs/fast-house-download.md` — earlier summaries (Sep 24).
+## Rules
+- Accuracy over reassurance. Label MEASURED / ESTIMATE / VERIFY. Say what you have not checked. When you are wrong, say so plainly and correct it (this session had to correct a disk-space estimate that mixed GB and GiB).
+- Never tell Jarvis or Simon to pkill/killall anything; stop services with systemctl or a confirmed PID. Never restart/recreate the open-webui container or edit the production llama-server unit without a backup and a test on a spare port. State plainly anything that could cut Simon off from Jarvis.
+- Changes to the box are Simon's decisions. Recommend; don't assume. Nothing gets deleted without his yes.
+- Never do Simon's graded schoolwork (his rule).
+- No model identifiers in commits or files.
+- Jarvis's read_file tool returns only the LAST 4,000 characters of a file (`content[-4000:]`), and run_host_command caps stdout/stderr at 4,000 chars each. Anything long Jarvis must read has to be split into chunks under 4,000 chars or read with `sed -n` ranges.
 
-## What was done this session
-1. Imported Simon's Cowork memory export and four pasted pages into `docs/wiki/`.
-2. Wrote the briefing for Jarvis (Parts 1-3, then Part 4 and Part 5), cross-checked every number and claim against the wiki pages, and corrected it against a live survey of the box.
-3. Delivery lesson: having Jarvis save a long file through write_file FAILED (tool-call JSON broke at an apostrophe, column 357). The 27B drops quotes in long tool-call strings. Deliver files to the box as a terminal heredoc Simon pastes: `cat > FILE <<'UNIQUE_END' ... UNIQUE_END` (quoted delimiter), then verify with `wc -l`, `wc -c` and `sha256sum | cut -c1-16`. His terminal display garbles long pastes, but the file lands intact — trust the checksum, not the echo.
+## Repo map (this branch)
+- `docs/jarvis-briefing-2026-09-25.md` (Parts 1-3), `-part4.md` (Simon's 24 wants, hard boundaries, self-improvement plan), `-part5.md` (facts verified on the box; wins on conflicts; updated this session with hardware identity and the model drive).
+- `docs/wiki/`: 34 Cowork memory pages copied verbatim (index in README.md). Deep research on every model, lever and plan. `v100-hardware-and-models.md` = the Cowork page "local-model-landscape".
+- `docs/benchmark-campaign.md`: the plan to benchmark every model, the per-model "card", model list, phases.
+- `docs/glm-5.3-test-plan.md`: GLM-5.3 full test matrix (A stock CPU / B needs Jarvis off / C forks and engines / D downloads / ruled out), with sources.
+- `docs/benchmarks/glm-5.3.md`: GLM-5.3 night-1 MEASURED results and analysis.
+- `docs/bench/`: sources of the scripts on the box (bench.sh, queue-runner.sh, queue.txt, summary.py, report.sh).
+- `docs/jarvis-survey.sh`: read-only box survey (Simon has ~/jarvis-survey.sh).
 
-## State of the box (survey 2026-09-25 01:00 UTC)
-- Running: llama-server, jarvis-run-host-commands, gpu-tune, jarvis-perf, nvidia-persistenced. nvidia-powercap inactive (intended).
-- GONE since the Sep 21 rebuild: the job API/worker/ntfy notifier/healthcheck, supervisor, embedding server, ACT tool server. Nothing listens on 8110/8100/8102/8103/8090.
-- llama-server runs under `numactl --cpunodebind=0 --membind=0` (the rest of ExecStart was not captured; Part 1 has the config from notes: f16 KV, -c 24576, -ts 28,36, -devd CUDA0, --parallel 2, --kv-unified, xhigh, --spec-draft-p-min 0.4, MTP draft n-max 5).
-- Tool server binds 0.0.0.0:8200 (unrestricted shell on the LAN). Suggested fix `--host 172.17.0.1`, not done.
-- Driver 580.178.04, NOT held by apt. ECC disabled on both GPUs (buys nothing; notes recommend re-enabling). Power limit 200 W.
-- Jarvis's Open WebUI system prompt is only 367 chars; safety sections §13/§14/§19 are MISSING. Model row: temperature 0, num_ctx 24576, function calling native, builtin_tools False.
-- Tailscale: no serve config (nothing published). Boot NVMe healthy (100% spare, 0 errors). One `truncated = 1` context overflow since boot.
-- llama.cpp build supports qwen4exp, glm-dsa, hy_v4, mimo2, deepseek4; NOT glm5next (GLM-5.3-Flash needs the Unsloth fork).
-- Jarvis's memory (`~/jarvis-memory/`): state.md (STALE, Sep 21 config, calls Simon "Jack"), log.md, operating-manual.md (has the guardrails, calls Simon "Jack"), findings/*.md (save_finding / memory_search), and the briefing files.
+## The box (jarvis-1)
+- Hardware SETTLED by dmidecode: **HYVE G2GPU12**, board ASUS **Z10PG-D16 Series**, BIOS 3803. The ASUS ESC4000 G3 is a SEPARATE machine being set up as a NAS. Chassis facts in the wiki written for "ESC4000" (PSU, GPU harness, max 4 GPUs, ASUS CPU list) do not apply to jarvis-1.
+- 2x Xeon E5-2699 v3 (Haswell, AVX2, no AVX-512; 18 cores per socket), 503 GiB RAM (~251 GiB per NUMA node), 2x Tesla V100-PCIE-16GB (both on NUMA node 0), Ubuntu 24.04, driver 580.178.04 (NOT held by apt), CUDA toolkit 12.9 (must stay <=12.9 for sm_70), ECC off, power limit 200 W, numa_balancing 0, governor performance, THP madvise.
+- Disks: Samsung 990 PRO 1 TB NVMe (`/`, ext4), SATA optical drive, ~9 free SATA ports. A 4 TB Seagate SkyHawk in a USB enclosure ("model drive", below).
+- Memory bandwidth MEASURED (STREAM Triad, after the uncore/governor fix): 29.5 GB/s one socket, 59.5 GB/s both sockets interleaved.
+- Production llama-server ExecStart (MEASURED): `numactl --cpunodebind=0 --membind=0 llama-server -hf ggml-org/Qwen3.8-27B-GGUF:Q4_K_M -ngl 99 -sm layer -ts 28,36 -ctk f16 -ctv f16 -c 24576 --host 0.0.0.0 --port 8080 --jinja --chat-template-kwargs '{"reasoning_effort":"xhigh"}' --no-mmproj --no-reasoning-preserve --spec-type draft-mtp -md /home/simon/models/mtp-Qwen3.8-27B-Q4_0.gguf --spec-draft-n-max 5 -devd CUDA0 -ngld 99 --parallel 2 --kv-unified --spec-draft-p-min 0.4`, Restart=always. VRAM ~14.1/14.2 GiB idle, ~15.6 peak under load. Weights come from ~/.cache/huggingface (keep it).
+- Context: 4 silent truncations (`truncated = 1`) in 48 h, all slot 0 at n_tokens 24575, i.e. one conversation filling the whole window. A bigger -c is not safe on the GPUs. ~/ctxwatch.py exists (pass 24576 as argv[1]).
+- Tool server output caps are live (4000 chars). Tool server still binds 0.0.0.0:8200 (LAN-exposed shell; fix --host 172.17.0.1 is Simon's decision, not done).
+- Pre-rebuild stack is gone (job API/worker/ntfy/healthcheck/supervisor/embedding/ACT servers). ~/.ntfy-topic probably does not exist, so runner notifications only go to the log.
+- Open WebUI system prompt is only 367 chars; safety sections 13/14/19 missing (Simon to add; not done).
 
-## What Simon has done / not done (as far as known)
-- DONE: saved briefing Part 1-3 (`~/jarvis-memory/briefing-2026-09-25.md`, 26,612 bytes, sha256 prefix 230ee4de59c4058d — the version BEFORE the "Jackrong" rewording) and Part 4 (9,222 bytes, matches repo). Pointer lines added to state.md. Ran the survey.
-- CHECKED Sep 25 ~03:45Z: Part 1-3 on the box is still the pre-Jackrong-fix version (26,612 B, 230ee4de59c4058d). Part 4 matches (7dd4fa07d462a1e5). Part 5 NOT saved. Driver NOT held (showhold empty).
-- Part 5 was updated in the repo (48 lines, 6,079 B, hash 1e5775436aea51a0): hardware identity settled, model-drive section added. Delivery of it + the Jackrong fix (a small python replace script, result must hash 794606f5864d29df) was handed to Simon; confirm it landed.
-- NOT YET DONE: safety block in the system prompt; pinning the driver; sending Jarvis the "read the briefing files" message; revoking the HF token that sits in plain text on the model drive.
+## llama.cpp build facts (~/llama.cpp, f4e276a20, 2026-09-21)
+- `--no-mmap` is GONE (error: invalid argument). Use `-lm/--load-mode auto|none|mmap|mlock|mmap+mlock|dio`; also `-lzm/--lazy-mode on|auto|off`. We use `-lm dio -lzm off` (direct I/O into RAM, bypasses page cache).
+- No `--mtp` flag. MTP = `--spec-type draft-mtp` (types include draft-simple, draft-eagle3, draft-mtp, draft-dflash, draft-dspark, ngram-*). Whether draft-mtp with no -md uses a head embedded in the model file is VERIFY (GLM-5.3 has one).
+- llama-server has -cmoe, -ncmoe, -tb, --cache-reuse, --slot-save-path. llama-bench has -d, -lm, -lzm, -ncmoe, -fitt/-fitc (auto-fit to VRAM), -nkvo, -ot, -o jsonl, but NO -cmoe, NO --threads-batch, no speculative decoding, no --parallel.
+- Supports archs qwen4exp (Flash-Next), glm-dsa (GLM-5.3), hy_v4, mimo2, deepseek4; NOT glm5next (GLM-5.3-Flash needs Unsloth's llama.cpp fork).
+- On CPU it repacks Q4_K expert weights to q4_K_8x8 at load (stock already does AVX2 repacking).
 
-## Model drive (plugged into jarvis-1 on Sep 25)
-- 4 TB SkyHawk, USB, NTFS label Models, /dev/sda2, mounted READ-ONLY at /mnt/models (not in fstab yet). Content in /mnt/models/models/, 2.7 TB used, 1.1 TB free. Download chain was stopped with STOP-CHAIN.txt; no errors in chain.log.
-- Folder sizes: MiMo 522G (still two raw parts, not joined), GLM-5.3 437G, GLM-5.3-Flash 188G, Flash-Next unsloth 128G, GSQ-RCO IQ3_XXS 71G, Q2_0 62G, HauhauCS 27B 35G, 27B-MTP 29G, Coder-Next 34G, VL-32B 20G, gpt-oss-20b 13G, corpus 577G, audio 208G, video 182G, train 98G, data 28G, image 20G, embed 14G, slots 9G.
-- Verify: verify.py copied to ~/model-verify/ with ROOT=/mnt/models/models and LOGDIR=~/model-verify/_logs (drive stays read-only). Size-only: 53/53 files OK. Full sha256 started in background (~1.45 TB, ~2-2.5 h, output ~/model-verify/full.out). verify.py only covers 9 repo folders; 27B-MTP, Coder-Next, VL-32B, embed, audio, video, image need a second pass.
-- The drive carries the Cowork session's JARVIS-BRIEFING.md, MANIFEST.md, BUILD-QUEUE.md (Tasks 0-9, Task 0 = backup), RESEARCH-SPEC.md, HANDOFF-PROMPT.txt. Its HANDOFF-PROMPT has wrong paths (/mnt/models/X instead of /mnt/models/models/X) and says "never write to the drive" while Task 0 puts restic on it. Its rule "don't copy the drive to NVMe; serve from HDD" is sensible; Claude agreed to follow it for now.
-- Backup target decision asked of Simon: (a) drive rw only during backup, (b) NAS, (c) drive now, NAS later (recommended).
+## Model drive (4 TB, USB, NTFS "Models", /dev/sda2)
+- Mounted READ-ONLY at /mnt/models (not in fstab: a reboot unmounts it). Content in /mnt/models/models/ (2.7 TB used). Download chain was stopped deliberately (STOP-CHAIN.txt), no errors.
+- LLMs: GLM-5.3 UD-Q4_K_XL (11 shards, 468 GB, MTP head present: blk.78.nextn.* in shard 11), GLM-5.3-Flash UD-Q4_K_XL (6 shards ~200 GB, + mmproj), Qwen3.8-Flash-Next unsloth UD-Q4_K_XL (4 shards ~111 GB) + MTP/ (6 draft variants) + mmproj, Flash-Next GSQ-RCO IQ3_XXS (75.8 GB) and Q2_0 (66.4 GB), MiMo-V2.6-Pro MXFP4 as two RAW parts .part1/.part2 (need `cat` join, ~557 GB) + DFlash draft, HauhauCS 27B Uncensored (IQ4_XS, Q5_K_P, FastMTP draft), Qwen3.8-27B-MTP (Jackrong Q3_K_M 13.5 GB, Q4_K_M 16.8 GB), Qwen3-Coder-Next UD-Q3_K_XL 36.3 GB, Qwen3-VL-32B + mmproj, gpt-oss-20b MXFP4 + eagle3 draft, small models in slots/, embed/, verify/ (router 1.7B, 2B distill, embeddinggemma, rerankers, Qwen3-Embedding-4B, jina-code, OCR, ASR, Qwen3Guard-4B, phi3.5 hallucination judge, Qwen3-VL-4B). Plus audio (audio.cpp GGUFs), video (Wan2.2, LTX-2.5, Hunyuan1.5, SeedVR2), image (Z-Image), corpus, data, train, wheels: these need their own runtimes, not llama.cpp.
+- The drive also holds the Cowork session's JARVIS-BRIEFING.md, MANIFEST.md, BUILD-QUEUE.md (Tasks 0-9, Task 0 = backup), RESEARCH-SPEC.md, HANDOFF-PROMPT.txt. Only BUILD-QUEUE task headings and HANDOFF-PROMPT have been read. HANDOFF-PROMPT has wrong paths (/mnt/models/X instead of /mnt/models/models/X): do not give it to Jarvis as-is.
+- hf_token.txt (plain-text HF token) is on the drive and readable by any user/Jarvis. Recommended revoking it; Simon has not confirmed.
+- Verification: ~/model-verify/ = copy of verify.py pointed at the drive, log on NVMe. Size check passed 53/53. Full sha256 was stopped partway; only 12 files cached. ~/model-verify-nvme/ = copy pointed at /home/simon/models (ROOT) with its own _logs. verify.py only knows 9 repo folders (HauhauCS, Flash-Next unsloth/Q8_0, gpt-oss-20b, both GSQ-RCO, GLM-5.3-Flash, GLM-5.3, MiMo); other folders need a second pass.
 
-## Open questions / conflicts to resolve next
-1. SETTLED Sep 25: jarvis-1 = HYVE G2GPU12, Z10PG-D16 Series, BIOS 3803. The ESC4000 G3 is the NAS. Old question was: **Which machine is jarvis-1?** Jarvis's own finding says jarvis-1 is a **HYVE G2GPU12** (Z10PG-D16 board) and the **ASUS ESC4000 G3 is a separate machine Simon is setting up as a NAS** (8 hot-swap bays, needs caddy part 13GS1I0AM063-1). The Cowork notes call jarvis-1 the ESC4000 G3 throughout. Board/CPU facts hold either way; chassis facts (PSU derating, GPU power harness, "max 4 GPUs", ASUS CPU support list/BIOS versions in gpu-upgrade-options and system-performance-levers) may not. Settle with `sudo dmidecode -s system-product-name; sudo dmidecode -s baseboard-product-name; sudo dmidecode -s bios-version`.
-2. **Backup (Simon's #1 priority, WANT 19):** no off-box backup exists. The NAS is the natural target.
-3. Missing Cowork pages Simon may transfer: model-pull-and-flags, model-storage-plan, local-ai-setup, jarvis-backup, nvme-drive-failure, quant-quality-tables, model-tier-ceiling, glm-5.3-download, fast-house-extras, learning-partner, esc4000-parts-order, and any page updated after Sep 24. Save new pages into `docs/wiki/` verbatim (header: copied date, last-updated, summary; convert Cowork links to plain page names; redact the ntfy topic as `<ntfy-topic>`; never store keys) and update `docs/wiki/README.md`.
-4. Whether the fast-house download finished (state known only to Sep 24 14:00Z, ~1,821 GB done).
+## NVMe model copies (/home/simon/models)
+- GLM-5.3/ (437 GiB = 468 GB): copied and sha256-VERIFIED (12 files, 05:39Z).
+- Qwen3.8-Flash-Next-unsloth/ (128 GiB): copied (fn-copy unit, finished 13:48Z; unit still exists as active(exited) until `sudo systemctl stop fn-copy`, which was done). NOT yet hashed.
+- GLM-5.3-Flash/ (~188 GiB): copy RUNNING as unit glmf-copy since 14:02Z (46 GiB at 14:06, ~190 MB/s, ETA ~14:20Z). NOT yet hashed.
+- mtp-Qwen3.8-27B-Q4_0.gguf (Jarvis's draft, production, keep).
+- Space: df showed 250G avail before the GLM-5.3-Flash copy -> ~62G avail after, plus ~46 GiB ext4 root reserve. Base system use ~55 GiB (HF cache 20G is Jarvis's model: keep; docker image 7.2 GB is Open WebUI in use: keep). Optional trim: Flash-Next BF16/Q4 MTP draft files (~16 GiB; keep the two Q8_0 drafts). MiMo join (~557 GB) will NOT fit alongside these; needs a second drive (free SATA ports) or rotating models out.
+- RAM rule: Jarvis + ONE big model at a time. GLM-5.3 ~430 GiB resident, Flash-Next ~104 GiB, GLM-5.3-Flash ~186 GiB.
 
-## Rules for working with Simon and Jarvis
-- Accuracy over reassurance: label MEASURED / ESTIMATE / VERIFY; say plainly what you have not checked. A correction is a claim, not a verdict — re-read the source.
-- Never tell Jarvis (or Simon) to pkill/killall, restart or recreate the open-webui container, or edit the production llama-server unit without a backup and a test on a spare port. Anything that could cut Simon off from Jarvis must be stated plainly first.
-- Changes to the box are Simon's decisions. Recommend; don't assume.
-- Never do Simon's graded schoolwork (his own rule).
-- Keep files meant for Jarvis in plain ASCII-friendly text; deliver them by terminal heredoc, not through Jarvis's write_file.
-- Commit and push to `claude/new-session-uyo1y3`. No model identifiers in commits or files.
+## Simon's goals, in his order
+1. FIRST ORDER OF BUSINESS: benchmark every model fully (true max speed, max context, best config, including community forks, other engines, "absolutely everything"), then decide orchestrator slots. Plan: docs/benchmark-campaign.md.
+2. Then the model orchestrator (BUILD-QUEUE tasks 0-9: backup, jarvis.db, job queue + worker, ntfy, scheduler, single-card 27B A/B, freed card, router, research pipeline, control room). He wants Jarvis ALWAYS ON: a systemd worker that pulls tasks from SQLite, short fresh model calls per step, grounded checks, ntfy; later a self-improvement loop with a scorer Jarvis cannot write to (Part 4). Claude's recommendation given: backup + db + worker + kill switch/fences/budgets before any unattended or self-improving runs; long-context always-on worker should use Flash-Next on CPU (port 8081), not the 27B on 8080.
+3. Backup (WANT 19, his #1 priority on paper): no off-box backup exists. Options offered: restic on the model drive now, NAS later (recommended); undecided.
 
-## Update 2026-09-25 ~05:45 UTC (later in the same session)
-- GLM-5.3 UD-Q4_K_XL copied to /home/simon/models/GLM-5.3 on the 990 PRO (468 GB) and VERIFIED against HF sha256 (12 files, glm-verify, 05:39Z). MTP head present (blk.78.nextn.* in shard 11).
-- The full-drive verify run was stopped partway (only GLM-5.3 and the earlier cached files are hashed). Re-run ~/model-verify/verify.py later for the rest; it resumes from its cache.
-- llama.cpp build f4e276a20 (2026-09-21): --no-mmap is GONE, use -lm/--load-mode (auto|none|mmap|mlock|mmap+mlock|dio). No --mtp flag; MTP is --spec-type draft-mtp. llama-bench has -d, -lm, -ncmoe, -fitt, jsonl; no --threads-batch, no spec decoding, no --parallel.
-- Simon's first order of business: benchmark EVERY model fully (speed, max context, best config, community forks) before assigning orchestrator slots. Plan: docs/benchmark-campaign.md; GLM matrix: docs/glm-5.3-test-plan.md.
-- Bench tooling on the box, sources in docs/bench/: ~/bench/bench.sh (one-off runs), ~/bench/queue-runner.sh (overnight queue; stops Jarvis only 1-7 AM America/Chicago, max 300 min, always restarts him), ~/bench/queue.txt, ~/bench/summary.py, ~/bench/report.sh (one paste-able report).
-- NIGHT 1 STARTED 05:40Z: 11 GLM-5.3 jobs (threads, batch, fa, K cache, depth, poll; Jarvis-off: interleave, SMT prefill, GPU hybrid -cmoe / -ncmoe 76 / 74). Next step: Simon pastes ~/bench/report.sh glm output in the morning; pick best settings, build night 2 (server-mode tests: MTP, parallel, prompt cache, needle/max ctx; THP; remaining K cache types; then Flash-Next family).
-- ~/glm-test.sh exists (llama-server test unit on :8082, now -lm dio, NVMe path) for the server-mode tests later. ~/flashnext-test.sh was offered but may not be saved.
-- Still pending from earlier: Jackrong fix + Part 5 delivery to ~/jarvis-memory (never confirmed), HF token revoke, driver hold, backup decision, drive's BUILD-QUEUE/RESEARCH-SPEC/JARVIS-BRIEFING/MANIFEST not yet read in full. Simon wants an always-on Jarvis worker loop later (after benchmarking).
+## Benchmark tooling on the box (sources in docs/bench/, checksums verified)
+- ~/bench/bench.sh (41 lines, 5079788b7b862c1e): one-off llama-bench run as unit bench-<label>. Profiles: cpu1 (socket 1 only), cpu (--preferred=1, beside Jarvis), cpuil (--interleave=all, needs Jarvis stopped), gpu (GPUs visible, interleaved, needs Jarvis stopped). CPU profiles hide GPUs (CUDA_VISIBLE_DEVICES=). MemoryMax 465G, no swap, OOMScoreAdjust 1000.
+- ~/bench/queue-runner.sh (125 lines, 45f8e6ad3f31cb49): runs ~/bench/queue.txt jobs sequentially as units bench-<label> (systemd-run --wait). Lines: `<label> <profile> <max-hours> <llama-bench args>`. Jarvis-off jobs (cpuil/gpu) only 1-7 AM America/Chicago, max 300 min per night; runner always restarts llama-server and health-checks it (curl :8080/health), retries once, logs NOTIFY. Remembers ~/bench/queue.done and queue.failed (a label in either is skipped: delete the line to re-run). Pause: `touch ~/bench/STOP` (remove it before the next run). Start: `sudo systemd-run --unit=bench-queue --collect -p TimeoutStopSec=900 /home/simon/bench/queue-runner.sh`. Refuses to start while glm-copy/glm-verify/glm-test units are active (does not check fn-copy, glmf-copy, big-verify).
+- ~/bench/queue.txt (13 lines, 9b710b677bda2da4): night-1 GLM-5.3 queue.
+- ~/bench/summary.py (33 lines, 4b73432e94b907b0): table of a test's jsonl; columns = settings that vary.
+- ~/bench/report.sh (29 lines, 05a4225e5c7fe877): `~/bench/report.sh glm` writes ~/bench/report-<time>.txt (system state, queue log, per-test tables, log highlights) for Simon to paste.
+- Results: ~/bench/results/<label>/<time>.jsonl + .log + .args. Queue log: ~/bench/queue.log.
+- ~/glm-test.sh (28 lines, c06c887620c19c8f): llama-server test unit glm-test on 172.17.0.1:8082 for GLM-5.3 (NVMe path, -lm dio, -c arg default 32768, GPUs hidden, MemoryMax 465G, OOMScoreAdjust 1000). Never run it at the same time as a GLM benchmark (RAM).
+- ~/flashnext-test.sh was offered (nohup-based, port 8081, socket 1, points at the DRIVE path and uses --no-mmap, which no longer exists): it is OUTDATED; rewrite as a systemd unit with -lm dio and the NVMe path before use. May not even be saved on the box.
+
+## Night 1 (GLM-5.3) results, MEASURED (full write-up: docs/benchmarks/glm-5.3.md)
+- Decode: 0.9-1.1 t/s beside Jarvis; **1.48 t/s interleaved with Jarvis off** (~37 GB/s effective, ~62% of STREAM). At 16K depth: 0.74 (beside) / 1.00 (interleaved).
+- Prefill: ~10 t/s (pp512), ~7.6 t/s (pp4096) at empty context; ~2.5-2.8 t/s at 16K depth, ~4-4.7 at 8K. Prefill at depth is the real wall (full MLA attention, no DSA sparse indexer in llama.cpp).
+- No effect: ubatch 512-4096 (<4%), 72 vs 36 threads for prefill (+1%), threads for decode. FA on: +17% decode at 8K, -15% prefill at 8K.
+- Failures (test design errors): `-cmoe` does not exist in llama-bench; `-ncmoe 76/74` -> "unable to allocate CUDA1 buffer"; `-ctk q8_0 -fa on` -> "failed to create context" (retry with -fa off).
+- Resident: CPU 184,022 MiB + CPU_REPACK 255,744 MiB. KV bytes/token NOT yet measured (llama-bench does not print it; use a llama-server run).
+- Night-1 queue status at 14:06Z: done a1-threads, b1-interleave, b1-smt-prefill, a2-batch, a3-fa; failed b2-hybrid-cmoe, b2-hybrid-ncmoe76, b2-hybrid-ncmoe74, a5-kcache; **a6-depth RUNNING since 13:31Z (cap 4 h, until 17:31Z)**, a7-poll after it (~30 min). Jarvis back up and healthy since 09:27Z.
+
+## Next steps, in order
+1. When glmf-copy shows ~188G and active (exited): `sudo systemctl stop glmf-copy`.
+2. When `tail -3 ~/bench/queue.log` shows "Benchmark queue finished" (not before: hashing and building distort running benchmarks): hash both new copies:
+   `sudo systemd-run --unit=big-verify -p User=simon -p Group=simon -p Nice=10 -p RemainAfterExit=yes -p WorkingDirectory=/home/simon/model-verify-nvme /usr/bin/python3 /home/simon/model-verify-nvme/verify.py --only Qwen3.8-Flash-Next-unsloth GLM-5.3-Flash` (~18 min; watch `journalctl -u big-verify`; then `sudo systemctl stop big-verify`).
+3. Build ik_llama.cpp CPU-only in ~/ik_llama.cpp (commands were given: clone, cmake -DGGML_CUDA=OFF -DGGML_NATIVE=ON, build llama-bench llama-server llama-sweep-bench, then grep src for glm-dsa and list its -fmoe/-mla/-rtr/-amb/-ser flags). Not done yet.
+4. Analyse a6-depth and a7-poll results (`~/bench/report.sh glm`), update docs/benchmarks/glm-5.3.md.
+5. Night-2 queue for GLM-5.3: baseline control each night; interleave + fa on/off; depth curve interleaved; hybrid done right (-ngl 99 -ncmoe 79 = all experts on CPU, then llama-bench -fitt auto-fit, or walk -ncmoe down one layer at a time); -ctk q8_0 with -fa off; ik_llama.cpp head-to-head (-rtr, -fmoe, -mla modes, -amb, --split-mode graph, llama-sweep-bench). Remove or relabel the failed labels in queue.failed/queue.txt so they re-run.
+6. Server-mode tests need a new llama-server test harness (not written yet): KV bytes/token from the startup log, MTP (--spec-type draft-mtp, n-max 1-5, p-min 0/0.4), --parallel 1/2/4/8 aggregate t/s, --cache-reuse 256 with -lv 4, --slot-save-path save/restore, needle test at max -c with truncated = 0. Add a server mode to the queue runner.
+7. Then Flash-Next family (UD-Q4_K_XL + MTP drafts, GSQ-RCO IQ3_XXS and Q2_0; fits one socket so NUMA mirroring forks are testable), GLM-5.3-Flash (needs Unsloth fork build), GPU models in Jarvis-off windows (27B baseline, 27B-MTP Q3/Q4 single-card A/B, HauhauCS, VL-32B, gpt-oss-20b, Coder-Next), small models, MiMo last (needs join space and the whole box).
+8. Community/fork candidates found (details and links in docs/glm-5.3-test-plan.md section C and RULED OUT): ik_llama.cpp; llama.cpp PR #27861 GPU LRU expert cache; JigSawPT/moe-autopilot; discussion #24528; DSA indexer work (PR #21149 / discussion #21183, fairydreaming deepseek-dsa branch, ubergarm GLM-5.1 draft); KTransformers (AVX2 backend since Mar 2026; GLM-5.3 full and Volta support VERIFY); llama.cpp-ng; PrismML PR #251; TurboQuant CPU forks. NUMA mirror (PR #27986, ik PR #2396) impossible for GLM-5.3 at Q4 (870 GiB), fine for Flash-Next. PR #25294 (stream experts from disk) is for MiMo.
+
+## Still pending from earlier (unconfirmed or undecided)
+- Jackrong-wording fix to ~/jarvis-memory/briefing-2026-09-25.md (was 26,612 B / 230ee4de59c4058d; fix script /tmp/fix-jackrong.py hash 2cb672e4e2d1a818 should give 26,764 B / 794606f5864d29df) and saving Part 5 (48 lines, 6,079 B, 1e5775436aea51a0) + a state.md pointer line: blocks were given, Simon never confirmed running them. Part 4 on the box matches the repo (7dd4fa07d462a1e5).
+- Jarvis's state.md is stale (Sep 21 config, calls Simon "Jack").
+- Driver hold, HF token revoke, tool-server bind fix, system-prompt safety block, ECC: all Simon's decisions, not done.
+- Read the drive's BUILD-QUEUE.md, RESEARCH-SPEC.md, JARVIS-BRIEFING.md, MANIFEST.md in full (Simon to cat them); then write orchestrator-plan.md reconciled with the box, plus a chunked (<4000 chars per part) version for Jarvis.
+- Missing Cowork pages Simon may transfer (model-pull-and-flags, model-storage-plan, local-ai-setup, jarvis-backup, nvme-drive-failure, quant-quality-tables, model-tier-ceiling, glm-5.3-download, fast-house-extras, learning-partner, esc4000-parts-order). Save verbatim into docs/wiki/ with the header convention and update docs/wiki/README.md.
+- /etc/fstab entry for the model drive (read-only) not created.
