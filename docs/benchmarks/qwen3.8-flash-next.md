@@ -59,16 +59,21 @@ Decode loses only 30% by 64K (GLM-5.3 lost 33% by 16K). Filling a 64K prompt tak
 Poll (fn-a7): 0/50/100 all 29.3 pp / 4.14-4.15 tg: no effect.
 Control (fn-a0-baseline-end, 4:33 PM): 29.42 / 4.19 vs 29.35 / 4.10 at 12:42 PM: box stable over the run (within 2%).
 Day-1 queue finished 4:33 PM CT; fn-b1-interleave and fn-b1-threads-il (Jarvis off) left for a night window.
-### MTP test (PR #28243 build, socket 1, -t 12 -tb 36, temp 0, 300 tokens) - PARTIAL, MEASURED 2026-09-25 4:39 PM CT
-| config | reasoning tg | copy tg | prose tg | draft accepted (r/c/p) |
-|---|---|---|---|---|
-| off | 4.28 | 4.30 | 4.31 | - |
-| shared-Q8 n-max 1 | 5.58 | 5.15 | 5.43 | 147/152, 117/140, 80/90 |
-| shared-Q8 n-max 2 | 6.26 | 5.48 | 5.40 | 193/210, 156/204, 99/140 |
-| shared-Q8 n-max 3 | **7.62** (1.78x) | 6.44 | 6.14 | 219/239, 177/243, 112/174 |
-EVERY MTP output is DIFFERENT from MTP off, even n-max 1. Not yet known whether this is benign (batched verification changes floating-point results, flipping near-tie tokens late in the text) or the PR's divergence bug. Divergence check (MEASURED): every MTP config first differs from MTP off at the SAME character (reasoning 113 of ~697, copy 349 of ~1174, prose 315 of ~885), at a near-tie word choice ("Arrive stop at 12:10" vs "Arrive 12:10"; "the refrigerator" vs "the fridge"; "appears as variable in" vs "appears in"). Both versions stay coherent and the reasoning reaches the same correct intermediate times (12:10, 12:35). Reading: benign numeric difference between single-token decode and batched draft verification, NOT the PR's n-max >= 3 divergence bug (it happens identically at n-max 1). Still to confirm: MTP configs identical to each other, and MTP off identical to itself run to run; quality equivalence on the quality suite. Model load ~190 s per server start.
+### MTP test (PR #28243 build, socket 1, -t 12 -tb 36, temp 0, 300 tokens) - MEASURED 2026-09-25 4:39-5:19 PM CT
+Results: ~/bench/results/fn-mtp/20260925-213943/
+| config | reasoning tg | copy tg | prose tg | mean | vs off | draft accepted (r/c/p) |
+|---|---|---|---|---|---|---|
+| off | 4.28 | 4.30 | 4.31 | 4.30 | 1.00x | - |
+| shared-Q8 n-max 1 | 5.58 | 5.15 | 5.43 | 5.39 | 1.25x | 147/152, 117/140, 80/90 |
+| shared-Q8 n-max 2 | 6.26 | 5.48 | 5.40 | 5.71 | 1.33x | 193/210, 156/204, 99/140 |
+| **shared-Q8 n-max 3** | **7.62** | **6.44** | **6.14** | **6.73** | **1.57x** | 219/239, 177/243, 112/174 |
+| shared-Q8 n-max 4 | 7.24 | 5.62 | 5.30 | 6.05 | 1.41x | 229/277, 185/300, 116/220 |
+| shared-Q4 n-max 2 | 6.37 | 5.54 | 5.47 | 5.79 | 1.35x | 195/208, 157/202, 100/138 |
+| full-Q8 n-max 2 | 6.30 | 5.52 | 5.46 | 5.76 | 1.34x | 193/210, 156/204, 99/140 |
+Prefill unchanged by MTP (~25 t/s). Best: n-max 3 (1.57x mean, 1.78x on reasoning); n-max 4 is worse. shared-Q4 ~= shared-Q8 at n2 (smaller, same speed): try shared-Q4 at n-max 3 next.
+Output check (MEASURED): all 6 MTP configs produce IDENTICAL text to EACH OTHER on all 3 prompts (every pair), and all differ from MTP off at the same near-tie token. So MTP output is deterministic and independent of n-max and head; the difference is a systematic numeric-path difference between the MTP server path and plain decode, not the PR's n-max >= 3 bug. Remaining checks before adopting: MTP-off run twice (run-to-run identity) and equal scores on the quality suite.
 
-Best single-socket stock config so far: -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
+Best single-socket stock config so far (before MTP): -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
 
 ## Commands kept for later
 Build the MTP PR (only after "Benchmark queue finished"; CPU-only; production untouched):
