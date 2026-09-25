@@ -56,11 +56,21 @@ pp4096: 36 threads 7.51, 72 threads 7.59. Hyperthreads add ~1%: not worth it.
 - -cmoe is not a llama-bench option (only -ncmoe N). Use -ncmoe 79 for "all experts on CPU".
 - -ncmoe 76 and 74 failed "unable to allocate CUDA1 buffer": too many expert layers on the GPUs. Next: -ncmoe 79, then use llama-bench -fitt (auto-fit) or walk down one layer at a time.
 
-### glm-a6-depth (beside Jarvis, tg64) - RUNNING, partial
-| depth | 0 | 4096 | 16384 | 32768 |
-|---|---|---|---|---|
-| decode t/s | 1.106 | 0.928 | pending (~15:05-15:10Z) | will NOT finish |
-Test design error (Claude's): the 32K point needs ~3.6 h just to prefill 32K tokens (ESTIMATE from the night-1 prefill rates), and the 4 h cap ends at 17:31Z. Recommended to Simon: stop bench-glm-a6-depth once the 16K line is written; re-run 32K later as its own job with a 6 h cap.
+### glm-a6-depth (beside Jarvis, tg64, fa auto) - MEASURED 2026-09-25, 32K point dropped
+| depth | 0 | 4096 | 16384 |
+|---|---|---|---|
+| decode t/s | 1.11 | 0.93 | 0.74 |
+Decode loses ~33% by 16K depth. The 16K point finished 09:59 AM CT; stopped there on purpose by a6-stopper (Simon's decision): the 32K point needed ~3.6 h of prefill and could not finish before the 4 h cap (test design error, Claude's). The runner logged it DONE (llama-bench exited 0 on stop), so the label is in queue.done. Re-run 32K later under a NEW label with a 6 h cap, or in the server harness.
+
+### glm-a7-poll (beside Jarvis, -r 2) - MEASURED
+| poll | pp512 | tg64 |
+|---|---|---|
+| 0 | 9.90 | 1.10 |
+| 50 (default) | 9.89 | 1.10 |
+| 100 | 9.87 | 1.10 |
+No effect (under 0.3%). Keep the default.
+
+Night-1 queue finished 10:28 AM CT: 7 done, 4 failed (the three hybrid jobs and a5-kcache, all test-design errors). Jarvis healthy afterwards.
 
 ## Can GLM-5.3 use its 1M context here? (ESTIMATE, 2026-09-25)
 Native context is 1,048,576. KV per token at f16 ~88 KiB (SOURCE: MLA path, K only; not yet measured on the box).
@@ -73,4 +83,4 @@ Under the 465G cap at f16: ~350K tokens at most, minus compute buffers (VERIFY; 
 The real wall is time: prefill cost per token grows ~linearly with depth (0.1 s at d0, ~0.4 s at 16K). Extrapolated: fill 128K ~2 days, fill 1M ~3-4 months; decode at 1M depth ~0.05 t/s. Cause: llama.cpp runs full MLA attention (DSA sparse indexer not implemented). Practical usable context: tens of K tokens, maybe ~64K for one-off overnight jobs. Flash-Next is the long-context candidate.
 
 ## Not yet measured
-KV bytes per token (not printed by llama-bench; needs a llama-server run), depth curve (glm-a6 running), poll (a7), MTP, concurrency, prompt cache, max-context proof, hybrid GPU, ik_llama.cpp and other forks.
+KV bytes per token (not printed by llama-bench; needs a llama-server run), depth 32K and beyond, MTP, concurrency, prompt cache, max-context proof, hybrid GPU, ik_llama.cpp and other forks.

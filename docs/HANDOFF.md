@@ -92,6 +92,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 - GLM-5.3 1M context: not practical (see docs/benchmarks/glm-5.3.md).
 - GSQ-RCO file names still needed: ls the IQ3_XXS/ and Q2_0/ subfolders on the drive.
 - llama-server test harness: not written yet (next thing to write).
+- GLM night-1 queue FINISHED 10:28 AM CT (7 done, 4 failed). a6: 1.11 / 0.93 / 0.74 t/s at depth 0 / 4K / 16K; a7 poll: no effect. Jarvis healthy, 489 GiB RAM available afterwards (12:13 PM CT). Box login banner: 54 apt updates pending, swap 5% used, / 88.2% used. Next: big-verify, then build-fnmtp, then the Flash-Next queue.
 
 - Simon's full orchestrator wants received 2026-09-25: docs/orchestrator-wants-simon-2026-09-25.md (+ .docx). Role tests derived from them added to docs/benchmark-campaign.md.
 
