@@ -11,7 +11,6 @@ Cowork links (claude.ai/cowork/...) only resolve inside Cowork.
 | — | nvme-drive-failure | not copied yet |
 | jarvis-system-build.md | jarvis-system-build (the wants backlog) | copied Sep 24 2026 |
 | jarvis-orchestrator.md | jarvis-orchestrator | copied Sep 24 2026 (ntfy topic redacted) |
-| — | jarvis-system-gaps | not copied yet |
 | agent-harnesses.md | agent-harnesses (updated Sep 23, 2026) | copied Sep 25 2026 |
 | big-model-decode-prefill.md | big-model-decode-prefill (updated Sep 23, 2026) | copied Sep 25 2026 |
 | context-and-speed-per-model.md | context-and-speed-per-model (updated Sep 23, 2026) | copied Sep 25 2026 |
@@ -38,6 +37,10 @@ Cowork links (claude.ai/cowork/...) only resolve inside Cowork.
 | qwen38-flash-next.md | qwen38-flash-next (updated Sep 22, 2026) | copied Sep 25 2026 |
 | power-thermals-and-tuning.md | power-thermals-and-tuning (updated Sep 23, 2026) | copied Sep 25 2026 |
 | orchestrator-slot-plan.md | orchestrator-slot-plan (updated Sep 23, 2026) | copied Sep 25 2026 |
+| jarvis-speed-tuning.md | jarvis-speed-tuning (updated Sep 21, 2026) | copied Sep 25 2026 (pasted) |
+| system-performance-levers.md | system-performance-levers (updated Sep 23, 2026) | copied Sep 25 2026 (pasted) |
+| jarvis-what-not-to-do.md | jarvis-what-not-to-do (updated Sep 23, 2026) | copied Sep 25 2026 (pasted) |
+| jarvis-system-gaps.md | jarvis-system-gaps (updated Sep 14, 2026) | copied Sep 25 2026 (pasted) |
 
 ## Sep 25 2026 import
 
@@ -47,3 +50,6 @@ local-eval-harness and jarvis-orchestrator twice, and each is kept once. jarvis-
 already matched the Sep 24 copy, so that file was not changed. The ntfy topic is replaced by
 `<ntfy-topic>`. Command lines are in code blocks. caption-generation is about the clipping
 campaign, not Jarvis; it was in the export, so it is included here.
+
+The four pages marked "(pasted)" were pasted into chat rather than exported. A pasted copy of
+jarvis-incidents matched the export version, so that page was not changed.
