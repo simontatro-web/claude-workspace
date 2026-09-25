@@ -83,6 +83,16 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 - Resident: CPU 184,022 MiB + CPU_REPACK 255,744 MiB. KV bytes/token NOT yet measured (llama-bench does not print it; use a llama-server run).
 - Night-1 queue status at 14:06Z: done a1-threads, b1-interleave, b1-smt-prefill, a2-batch, a3-fa; failed b2-hybrid-cmoe, b2-hybrid-ncmoe76, b2-hybrid-ncmoe74, a5-kcache; **a6-depth RUNNING since 13:31Z (cap 4 h, until 17:31Z)**, a7-poll after it (~30 min). Jarvis back up and healthy since 09:27Z.
 
+## Session 2026-09-25 afternoon (updates on top of the above)
+- glmf-copy DONE and stopped; GLM-5.3-Flash copy matches the drive by names and byte sizes.
+- a6-depth partial: d0 1.106, d4096 0.928 t/s. d16384 expected ~15:05-15:10Z. d32768 cannot finish before the 17:31Z cap: recommended stopping bench-glm-a6-depth after the 16K line (Simon's call, not yet confirmed).
+- Flash-Next day-1 queue written: docs/bench/queue-fn.txt (15 lines, 2688 B, f6751ff9b097e02c), to be saved as ~/bench/queue-fn.txt. Simon has NOT yet confirmed pasting it. Swap into queue.txt only after the GLM queue finishes and big-verify is done (save the old one as queue-glm-night1.txt). Never edit queue.txt or queue-runner.sh while the runner is running.
+- Flash-Next MTP: stock build has no qwen4exp MTP (MEASURED by grep). PR #28243 fetched as a worktree at ~/llama.cpp-fnmtp, commit 6fcaa16f4, base bb3c853c3 (5 commits behind production). Not built yet; build command (unit build-fnmtp, CPU-only) is at the end of docs/benchmarks/qwen3.8-flash-next.md; run it only after the GLM queue finishes. Use shared-Q8_0 MTP head, -md explicit, n-max 2 default; always check greedy output identical with MTP off.
+- Corrected Flash-Next speed estimate: ~5-6 t/s socket 1, ~10 interleaved, ~13-19 best case with mirror + MTP. The wiki's 18-27 was a stacked best case. docs/benchmarks/qwen3.8-flash-next.md.
+- GLM-5.3 1M context: not practical (see docs/benchmarks/glm-5.3.md).
+- GSQ-RCO file names still needed: ls the IQ3_XXS/ and Q2_0/ subfolders on the drive.
+- llama-server test harness: not written yet (next thing to write).
+
 ## Next steps, in order
 1. DONE ~14:20Z: glmf-copy finished (188G, names+sizes match the drive) and was stopped.
 2. When `tail -3 ~/bench/queue.log` shows "Benchmark queue finished" (not before: hashing and building distort running benchmarks): hash both new copies:

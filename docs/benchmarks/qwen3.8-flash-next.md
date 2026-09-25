@@ -33,3 +33,10 @@ Night 1 on GLM-5.3 measured llama.cpp reaching ~62% of STREAM. With ~3.7 GB read
 
 ## Results
 None yet.
+
+## Commands kept for later
+Build the MTP PR (only after "Benchmark queue finished"; CPU-only; production untouched):
+```
+sudo systemd-run --unit=build-fnmtp -p User=simon -p Group=simon -p WorkingDirectory=/home/simon/llama.cpp-fnmtp /bin/bash -c 'cmake -S . -B build -DGGML_CUDA=OFF -DGGML_NATIVE=ON -DCMAKE_BUILD_TYPE=Release && cmake --build build -j 36 --target llama-server llama-bench llama-cli'
+journalctl -u build-fnmtp -n 5 --no-pager
+```

@@ -56,5 +56,21 @@ pp4096: 36 threads 7.51, 72 threads 7.59. Hyperthreads add ~1%: not worth it.
 - -cmoe is not a llama-bench option (only -ncmoe N). Use -ncmoe 79 for "all experts on CPU".
 - -ncmoe 76 and 74 failed "unable to allocate CUDA1 buffer": too many expert layers on the GPUs. Next: -ncmoe 79, then use llama-bench -fitt (auto-fit) or walk down one layer at a time.
 
+### glm-a6-depth (beside Jarvis, tg64) - RUNNING, partial
+| depth | 0 | 4096 | 16384 | 32768 |
+|---|---|---|---|---|
+| decode t/s | 1.106 | 0.928 | pending (~15:05-15:10Z) | will NOT finish |
+Test design error (Claude's): the 32K point needs ~3.6 h just to prefill 32K tokens (ESTIMATE from the night-1 prefill rates), and the 4 h cap ends at 17:31Z. Recommended to Simon: stop bench-glm-a6-depth once the 16K line is written; re-run 32K later as its own job with a 6 h cap.
+
+## Can GLM-5.3 use its 1M context here? (ESTIMATE, 2026-09-25)
+Native context is 1,048,576. KV per token at f16 ~88 KiB (SOURCE: MLA path, K only; not yet measured on the box).
+| K cache | 1M tokens | weights (429.5 GiB MEASURED) + KV | fits? |
+|---|---|---|---|
+| f16 | ~88 GiB | ~518 GiB | no (503 GiB RAM) |
+| q8_0 | ~47 GiB | ~476 GiB | only above the 465G cap, at the edge of RAM; q8_0 + FA failed on night 1 |
+| q4_0 | ~25 GiB | ~455 GiB | on paper; recall cost; untested |
+Under the 465G cap at f16: ~350K tokens at most, minus compute buffers (VERIFY; FA likely needed at long context).
+The real wall is time: prefill cost per token grows ~linearly with depth (0.1 s at d0, ~0.4 s at 16K). Extrapolated: fill 128K ~2 days, fill 1M ~3-4 months; decode at 1M depth ~0.05 t/s. Cause: llama.cpp runs full MLA attention (DSA sparse indexer not implemented). Practical usable context: tens of K tokens, maybe ~64K for one-off overnight jobs. Flash-Next is the long-context candidate.
+
 ## Not yet measured
 KV bytes per token (not printed by llama-bench; needs a llama-server run), depth curve (glm-a6 running), poll (a7), MTP, concurrency, prompt cache, max-context proof, hybrid GPU, ik_llama.cpp and other forks.
