@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
-# Prints a table from llama-bench jsonl results.
+# Prints a table from llama-bench jsonl results. Columns = the settings that vary between tests.
 # Usage: python3 ~/bench/summary.py ~/bench/results/<label>/*.jsonl
 import json, sys
 rows = []
 for path in sys.argv[1:]:
     for line in open(path, errors="replace"):
         line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            rows.append(json.loads(line))
-        except ValueError:
-            pass
+        if line.startswith("{"):
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                pass
 if not rows:
     sys.exit("no results found")
-print("%-5s %6s %6s %6s %4s %5s %5s %5s %5s %4s %9s %8s" % (
-    "test", "prompt", "gen", "depth", "thr", "b", "ub", "ctk", "ctv", "fa", "t/s", "+/-"))
+skip = {"avg_ns", "stddev_ns", "avg_ts", "stddev_ts", "samples_ns", "samples_ts", "test_time",
+        "build_commit", "build_number", "cpu_info", "gpu_info", "model_filename"}
+keys = []
 for r in rows:
-    test = "pp" if r.get("n_prompt", 0) and not r.get("n_gen", 0) else ("tg" if r.get("n_gen", 0) and not r.get("n_prompt", 0) else "pg")
-    print("%-5s %6s %6s %6s %4s %5s %5s %5s %5s %4s %9.2f %8.2f" % (
-        test, r.get("n_prompt"), r.get("n_gen"), r.get("n_depth", 0), r.get("n_threads"),
-        r.get("n_batch"), r.get("n_ubatch"), r.get("type_k"), r.get("type_v"),
-        str(r.get("flash_attn")), float(r.get("avg_ts", 0)), float(r.get("stddev_ts", 0))))
-print("model: %s  size: %.1f GiB  params: %.1fB  backend: %s" % (
-    rows[0].get("model_type"), rows[0].get("model_size", 0) / 2**30,
-    rows[0].get("model_n_params", 0) / 1e9, rows[0].get("backends")))
+    for k in r:
+        if k not in skip and k not in keys and not isinstance(r[k], (list, dict)):
+            keys.append(k)
+vary = [k for k in keys if len({str(r.get(k)) for r in rows}) > 1]
+for k in ("n_prompt", "n_gen", "n_depth"):
+    if k not in vary:
+        vary.insert(0, k)
+same = {k: rows[0].get(k) for k in keys if k not in vary}
+print("fixed: " + ", ".join("%s=%s" % (k, v) for k, v in same.items()))
+w = [max(len(k), max(len(str(r.get(k))) for r in rows)) for k in vary]
+print("  ".join(k.rjust(n) for k, n in zip(vary, w)) + "        t/s      +/-")
+for r in rows:
+    print("  ".join(str(r.get(k)).rjust(n) for k, n in zip(vary, w)) +
+          "  %9.2f  %7.2f" % (float(r.get("avg_ts", 0)), float(r.get("stddev_ts", 0))))
