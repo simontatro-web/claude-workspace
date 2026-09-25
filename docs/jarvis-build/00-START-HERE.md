@@ -30,5 +30,7 @@ A job queue in SQLite that refuses to run any build job without a spec Simon app
 Your context is only 24,576 tokens and you cannot see how full it is.
 - Keep a block at the TOP of ~/jarvis-build/PROGRESS.md titled "RESUME HERE" (max 15 lines): current step, what is done, the exact next action, open problems, files touched.
 - Rewrite it after EVERY finished sub-task (a test passing, a commit), not only at the end.
-- If a system message says CONTEXT NEARLY FULL or CONTEXT CRITICAL: update RESUME HERE, commit, tell Simon to start a new chat, and stop.
+- If a system message says CONTEXT NEARLY FULL or CONTEXT CRITICAL (the filter, used before the J3 proxy exists): update RESUME HERE, commit, tell Simon to start a new chat, and stop.
+- If a system message says CONTEXT HIGH (the J3 proxy): finish the current small step, update RESUME HERE, commit, then keep working.
+- If a system message says CONTEXT COMPACTED: earlier messages are gone from your view. Continue from the handoff's exact next action. Check `git log --oneline -5` before redoing anything, and re-check any fact with a tool before stating it.
 - A new chat reads RESUME HERE first and continues from its "exact next action".

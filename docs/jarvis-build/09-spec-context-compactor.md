@@ -1,25 +1,48 @@
-# J3 spec: context proxy (automatic, works even in the middle of a long turn)
+# J3 spec v2: context proxy (automatic, works even in the middle of a long turn)
 
 Goal: Jarvis Builder never overflows and never needs Simon to start a new chat. A small proxy sits between Open WebUI and llama-server and sees EVERY model request, including each round of a tool loop, so it can act mid-turn (a filter only runs when Simon sends a message).
 
-Build: ~/jarvis-build/ctxproxy/proxy.py (FastAPI + httpx in the venv), tests, a systemd unit file for Simon.
-- Listens on 127.0.0.1:8113 for tests; the real unit binds 172.17.0.1:8090 so the Open WebUI container can reach it.
-- Forwards everything to http://127.0.0.1:8080 unchanged (GET /v1/models, /health, etc.), including streaming (SSE) responses, chunk by chunk. Timeout 1800 s.
-- For POST /v1/chat/completions it first counts the tokens of all message text via POST /tokenize (fallback len//3), then:
-  - under warn (17000): forward untouched.
-  - warn to compact (17000-19999): add one system message at the end: "CONTEXT HIGH (N/24576). Right now: update ~/jarvis-build/RESUME.md with the exact next action, commit, then end your turn with a 2-line status." Only once per conversation step (do not stack duplicates).
-  - at or above compact (20000): compact what the model sees: keep the system message(s); add one system message "CONTEXT COMPACTED at N tokens. Earlier messages were removed from your view. Your handoff file says:" + the contents of ~/jarvis-build/RESUME.md (read directly from disk, max 6000 chars) + "Its age: M minutes. Continue from its exact next action; re-check facts with tools." Then keep the newest messages that fit in 8000 tokens, always including the last user message and never splitting an assistant tool_call from its tool result(s).
-  - If RESUME.md is missing or older than 30 minutes: before compacting, make ONE extra request to llama-server (reasoning effort low, max_tokens 800) asking it to summarise the messages being removed into: goal, done, next action, open problems; use that as the handoff, labelled "auto-summary, may be incomplete".
-- Every warn/compact writes one JSON line to ~/jarvis-build/ctxproxy/events.jsonl (time, tokens before/after, action).
-- Fail open: any error in counting or compacting -> forward the original request untouched and log the error. The proxy must never be the reason a chat fails.
+Test-first: ~/jarvis-build/ctxproxy/STRESS-PLAN.md is the full test list and the acceptance gates. This spec is the design; where they disagree, ask Simon.
 
-Tests (pytest, a fake upstream server on 127.0.0.1:8119 that records what it received; record and kill its PID):
-- T1 small request -> forwarded byte-identical; streaming passes through.
-- T2 18k tokens -> exactly one CONTEXT HIGH message added.
-- T3 22k tokens with a fresh RESUME.md -> upstream receives system + COMPACTED(with RESUME text) + newest messages, under 12k tokens, last user message present.
-- T4 cut would split a tool_call from its result -> both kept or both dropped.
-- T5 RESUME.md missing -> auto-summary request made once, then compacted request.
-- T6 /tokenize down -> estimate used; T7 a bug in compaction (force an exception) -> original forwarded.
-- T8 GET /v1/models passes through.
+## Measured facts (2026-09-25)
+- n_ctx = 24576 in /props and for each of the 2 slots in /slots. Server runs --parallel 2 --kv-unified.
+- NOT known yet: whether the two slots share ONE 24576 pool (so a delegate call running while the chat waits eats the chat's room). Live check P4b answers it; until then assume they share.
+- NOT known yet: how many tokens one step at xhigh writes (thinking + answer). The proxy measures it (see Logging).
 
-FOR SIMON: install the unit (runs as simon, Restart=always); in Open WebUI add a second connection (Admin > Settings > Connections > OpenAI API > +, URL http://172.17.0.1:8090/v1, any key); point the Jarvis Builder preset's base model at the model from that connection. Plain Jarvis stays direct on 8080, so if the proxy ever breaks, normal Jarvis still works. Undo: point Builder back to the direct model, stop the unit.
+## Build
+~/jarvis-build/ctxproxy/proxy.py (FastAPI + httpx in the venv), tests, a systemd unit file for Simon.
+- Listens on 127.0.0.1:8113 for tests; the real unit binds 172.17.0.1:8090 so the Open WebUI container can reach it. Unit: After=docker.service llama-server's unit, Wants=docker.service, Restart=always, RestartSec=3.
+- Forwards everything to http://127.0.0.1:8080 unchanged (GET /v1/models, /health, /props, /tokenize, auth headers), streaming (SSE) chunk by chunk, no buffering. Timeouts are settings (default 1800 s total, 300 s between chunks).
+- All numbers below are settings in one config block at the top of proxy.py, not literals in the code.
+
+## Budget (per request)
+- limit = 24576. reserve = output reserve for the model's reply at xhigh (start 6000; set from measured p99 later).
+- compact_at = limit - reserve - 1000 (start: 17576). warn_at = compact_at - 3000 (start: 14576).
+- count = tokens of ALL message text + the `tools` field (JSON-serialised) + template overhead (start 3%, calibrated in C3). Count via POST /tokenize, 3 s timeout, fallback len(text)//3.
+
+## Actions on POST /v1/chat/completions
+1. Skip (forward untouched, log "skip"): background requests. That is: Open WebUI task requests (last user message starts with "### Task:"), any request with header X-Ctxproxy-Skip: 1 (the proxy's own summary call and the delegate plugin set it). Simon also sets Open WebUI's Task Model to the direct 8080 model, so this is a second line of defence.
+2. Oversized single message: any one message over 4000 tokens (usually a tool output) is cut to its first 2500 + last 1000 tokens with "[CUT BY CONTEXT PROXY: N tokens removed]" in the middle. This happens on every request, before counting against thresholds.
+3. Under warn_at: forward.
+4. warn_at to compact_at: append ONE system message at the END: "CONTEXT HIGH (N/24576). Finish the current small step, update the RESUME HERE block in ~/jarvis-build/PROGRESS.md with the exact next action, commit, then continue working. The proxy will compact soon; you will not lose the RESUME HERE block." Never at the start, never twice.
+5. At or above compact_at: compact.
+   - Handoff text = the RESUME HERE block of ~/jarvis-build/PROGRESS.md (from "## RESUME HERE" to the next "## " heading; max 6000 chars, read with errors="replace"). If the block is missing, empty, or the file's mtime is older than 30 minutes: make ONE summary call direct to 8080 (header X-Ctxproxy-Skip: 1, reasoning_effort low, max_tokens 800, 60 s timeout, prompt trimmed to at most 12000 tokens of the messages being removed) for: goal, done, next action, open problems. Label it "auto-summary, may be incomplete". If that fails too, use "no handoff available; re-check PROGRESS.md and git log".
+   - Build: the system message(s) unchanged; then one system message "CONTEXT COMPACTED at N tokens. Earlier messages were removed from your view. Handoff (written <time> Chicago):" + handoff + "Continue from its exact next action. Re-check any fact with a tool before relying on it; do not redo committed work (check git log)." Then the newest whole messages that fit in keep = compact_at - 4000 - (system + tools + note). Always keep the last user message; never split an assistant tool_calls message from ALL its tool results.
+   - The note text is frozen at compaction time: no "age: N minutes" or anything else that changes between requests.
+6. Sticky state (critical for speed and against thrash). Open WebUI resends the FULL uncompacted history on every request. So the proxy remembers each compaction: key = sha256 of the system message(s) + the first user message; value = the id/index of the first kept message and the frozen note. On later requests with the same key, re-apply the SAME cut and the SAME note byte for byte, and only compact again when the result crosses compact_at again. Keep state in memory plus ~/jarvis-build/ctxproxy/state.json (atomic write) so a proxy restart does not re-compact differently. Max 50 keys, oldest dropped.
+
+## Logging
+One JSON line per chat request to ~/jarvis-build/ctxproxy/events.jsonl: time, key (first 8 hex), action (pass/warn/compact/skip/cut/error), tokens before/after, completion_tokens and reasoning tokens if the upstream reports them (final SSE chunk usage/timings), ms added. NEVER message text, headers or secrets. Rotate at 5 MB (keep 1 old file). This log is how we measure the real output per step and set `reserve`.
+
+## Fail open, but never forward an over-limit request
+Any exception in counting/compacting: forward the original request (after step 2's cuts) and log the error type. If even that is over limit, return a clear OpenAI-style error message "context proxy: request too large even after cuts" instead of a silent overflow.
+
+## Core tests (full list in STRESS-PLAN.md)
+T1 small request forwarded byte-identical, streaming passes. T2 warn band: exactly one CONTEXT HIGH, at the end. T3 compact: fits under compact_at - 4000, last user message present, note present. T4 tool_call pairs never split, parallel calls included. T5 no RESUME HERE block: one summary call with the skip header, then compact. T6 sticky: after a compact, 5 more requests with the growing full history produce an identical prefix (byte compare) and no second compaction until the threshold. T7 forced exception: original forwarded. T8 "### Task:" request skipped. T9 one 30k-token tool output is cut. T10 events.jsonl contains no canary string from messages or headers.
+
+## FOR SIMON (after all automated tests pass)
+1. Install the unit (runs as simon).
+2. Open WebUI: Admin > Settings > Connections > OpenAI API > +, URL http://172.17.0.1:8090/v1, any key. Point the Jarvis Builder preset's base model at the model from that connection.
+3. Admin > Settings > Interface > Task Model: set it to the direct (8080) model.
+4. Remove the context_watch filter from the Builder preset only (it counts the full uncompacted history and would tell Jarvis to stop after every compaction). Keep it on plain Jarvis.
+5. Plain Jarvis stays direct on 8080. Undo: point Builder back to the direct model, re-add the filter, stop the unit.
