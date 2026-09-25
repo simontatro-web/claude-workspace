@@ -59,6 +59,15 @@ Decode loses only 30% by 64K (GLM-5.3 lost 33% by 16K). Filling a 64K prompt tak
 Poll (fn-a7): 0/50/100 all 29.3 pp / 4.14-4.15 tg: no effect.
 Control (fn-a0-baseline-end, 4:33 PM): 29.42 / 4.19 vs 29.35 / 4.10 at 12:42 PM: box stable over the run (within 2%).
 Day-1 queue finished 4:33 PM CT; fn-b1-interleave and fn-b1-threads-il (Jarvis off) left for a night window.
+### MTP test (PR #28243 build, socket 1, -t 12 -tb 36, temp 0, 300 tokens) - PARTIAL, MEASURED 2026-09-25 4:39 PM CT
+| config | reasoning tg | copy tg | prose tg | draft accepted (r/c/p) |
+|---|---|---|---|---|
+| off | 4.28 | 4.30 | 4.31 | - |
+| shared-Q8 n-max 1 | 5.58 | 5.15 | 5.43 | 147/152, 117/140, 80/90 |
+| shared-Q8 n-max 2 | 6.26 | 5.48 | 5.40 | 193/210, 156/204, 99/140 |
+| shared-Q8 n-max 3 | **7.62** (1.78x) | 6.44 | 6.14 | 219/239, 177/243, 112/174 |
+EVERY MTP output is DIFFERENT from MTP off, even n-max 1. Not yet known whether this is benign (batched verification changes floating-point results, flipping near-tie tokens late in the text) or the PR's divergence bug. Checking where the texts diverge before trusting any MTP number. Model load ~190 s per server start.
+
 Best single-socket stock config so far: -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
 
 ## Commands kept for later
