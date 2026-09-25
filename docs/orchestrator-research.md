@@ -194,6 +194,9 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
   - **CUDA is safe from silent jumps:** only versioned `cuda-*-12-9` packages are installed, plus `cuda-keyring`. There is no unversioned `cuda` or `cuda-toolkit` metapackage, so an upgrade will not pull CUDA 13 (MEASURED).
   - **`/usr/sbin/lxc` is not owned by any package** (`dpkg -S` found nothing). Origin unknown: VERIFY V28. Still do not run it.
 
+- **Done by Simon, 2026-09-25 (MEASURED):** `simon` removed from `lxd` (`lxd:x:101:` has no members) and 17 NVIDIA packages held (`apt-mark showhold` = 17). D4 and D22 done, except purging `lxd-installer`, which is optional.
+- **Jarvis self-build handoff delivered:** `~/jarvis-build/handoff/` (5 files, checksums match `docs/jarvis-build/`).
+
 ### Remaining follow-up checks
 | # | Settles | Command |
 |---|---|---|
