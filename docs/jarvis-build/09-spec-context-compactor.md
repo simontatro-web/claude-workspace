@@ -1,5 +1,12 @@
 # J3 spec v2: context proxy (automatic, works even in the middle of a long turn)
 
+STATUS: BUILT BY CLAUDE (~/jarvis-build/ctxproxy/proxy.py, tests/, README.md). Jarvis does not rebuild it.
+As built, differences from the text below: KEEP_MARGIN is 6000 (post-compaction size ~11-12k, fewer
+compactions); a stale RESUME HERE block is kept AND an auto-summary is added; the warn note is appended to
+the last user/tool message (not a separate system message, which Qwen templates may reject); the compacted
+note is appended to the first system message; a broken or timed-out stream ends with an SSE error event;
+optional client key (CTXPROXY_CLIENT_KEY). README.md is the runbook.
+
 Goal: Jarvis Builder never overflows and never needs Simon to start a new chat. A small proxy sits between Open WebUI and llama-server and sees EVERY model request, including each round of a tool loop, so it can act mid-turn (a filter only runs when Simon sends a message).
 
 Test-first: ~/jarvis-build/ctxproxy/STRESS-PLAN.md is the full test list and the acceptance gates. This spec is the design; where they disagree, ask Simon.

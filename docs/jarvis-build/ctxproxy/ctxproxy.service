@@ -1,0 +1,25 @@
+[Unit]
+Description=Jarvis context proxy (Open WebUI -> llama-server, automatic compaction)
+After=network-online.target docker.service
+Wants=docker.service
+
+[Service]
+User=simon
+Group=simon
+WorkingDirectory=/home/simon/jarvis-build/ctxproxy
+Environment=CTXPROXY_HOST=172.17.0.1
+Environment=CTXPROXY_PORT=8090
+# CTXPROXY_CLIENT_KEY (and CTXPROXY_UPSTREAM_KEY if llama-server needs one) live here, mode 600:
+EnvironmentFile=/home/simon/.config/jarvis-ctxproxy.env
+ExecStart=/home/simon/jarvis-build/venv/bin/python /home/simon/jarvis-build/ctxproxy/proxy.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/simon/jarvis-build/ctxproxy
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
