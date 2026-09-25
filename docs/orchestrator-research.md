@@ -102,7 +102,7 @@ The chat template (V10) reads `enable_thinking` and `reasoning_effort`:
 - Reasoning is applied only if `enable_thinking` is undefined or true.
 - The allowed efforts are xhigh (the default), medium and low.
 
-So the voice and front-desk presets can send `chat_template_kwargs: {"enable_thinking": false}` (or `"reasoning_effort": "low"`) per request with no server change. Whether a per-request value overrides the server's `--chat-template-kwargs` default is **VERIFY**: V23 below is a one-request test.
+So the voice and front-desk presets can send `chat_template_kwargs: {"enable_thinking": false}` (or `"reasoning_effort": "low"`) per request with no server change. **Confirmed (V23, MEASURED):** a request with `enable_thinking: false` returned 0 reasoning characters and "OK.", so the per-request value overrides the server's xhigh default. No server change is needed for fast front-desk and voice turns.
 
 ### Exposure and permissions: worse than assumed in two places
 - **Firewall:**
@@ -168,13 +168,34 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
 - `~/.config/jarvis/restic-pass` exists (mode 600). **Keep a copy of that password off the box**, or the backup cannot be restored after a dead NVMe.
 - No repository location is known yet (D3).
 
-### Follow-up checks (all read-only, or a single harmless model request)
+### Follow-up results (V23-V26, run 2026-09-25)
+- **V23:** per-request thinking-off works (above).
+- **V24, LXD:**
+  - No LXD snap and no LXD socket, so there is **no live root path today**.
+  - But `/usr/sbin/lxc` exists. On Ubuntu 24.04 that is normally the `lxd-installer` stub, which installs the LXD snap the first time someone runs `lxc` (VERIFY with `dpkg -S /usr/sbin/lxc`; **do not run `lxc` to test it**).
+  - So the risk is latent: one `lxc` command from a member of `lxd` could create the root path.
+  - D22 stands: remove `simon` from `lxd` (nothing here uses LXD), and never add `jarvis`.
+- **V25, NVIDIA packages: a real update risk.**
+  - Installed: `nvidia-driver-580 580.178.04-0ubuntu0.24.04.1` from Ubuntu noble-updates/restricted.
+  - **NVIDIA's own CUDA apt repository is also configured, at priority 600, and offers a different build (`580.178.04-1ubuntu1`) as the upgrade candidate.**
+  - unattended-upgrades won't take it, because that repo is not in its allowed origins. But any manual `apt upgrade` would switch the driver to NVIDIA's packaging.
+  - The same repo will carry future driver branches and CUDA 13.x. **CUDA 13 cannot build for the V100 (sm_70), and later driver branches may drop Volta.**
+  - This makes D4 more urgent: hold `nvidia-driver-580`, `nvidia-dkms-580`, `libnvidia-compute-580` and the installed CUDA 12.9 packages, or pin the NVIDIA repo below the installed version. V27 lists exactly which CUDA packages are installed and upgradable.
+- **V26, drive contents:**
+  - **PMC and PubMed are not on the drive.** `corpus/refs/` holds only Vikidia; `corpus/ted/` holds two TED ZIMs.
+  - Research eval sets present: FRAMES, HotpotQA, MuSiQue, RAGTruth, SimpleQA, SimpleQA-verified.
+  - **HHEM-2.1-open is complete:** `model.safetensors` is 438,535,352 B, exactly the size recorded in the wiki.
+  - **The prompt-injection DeBERTa is complete:** a 737,719,272 B safetensors plus an ONNX export.
+  - Its folder also holds `training_args.bin`, a pickle file. It is not needed for inference; never load it (Part 4: no pickle files).
+
+### Remaining follow-up checks
 | # | Settles | Command |
 |---|---|---|
-| V23 | Per-request thinking-off works against the server default | `curl -s -m 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"Say OK."}],"max_tokens":40,"chat_template_kwargs":{"enable_thinking":false}}' \| python3 -c "import json,sys; m=json.load(sys.stdin)['choices'][0]['message']; print('reasoning chars:', len(m.get('reasoning_content') or '')); print('content:', m.get('content'))"` |
+| ~~V23~~ | done | (was) `curl -s -m 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"Say OK."}],"max_tokens":40,"chat_template_kwargs":{"enable_thinking":false}}' \| python3 -c "import json,sys; m=json.load(sys.stdin)['choices'][0]['message']; print('reasoning chars:', len(m.get('reasoning_content') or '')); print('content:', m.get('content'))"` |
 | V24 | Is `lxd` membership a live root path | `snap list 2>/dev/null \| grep -i lxd; ls -l /var/snap/lxd/common/lxd/unix.socket 2>&1; command -v lxc` |
 | V25 | Where the NVIDIA driver packages come from | `dpkg -l \| grep -E '^ii +(nvidia-driver\|nvidia-dkms\|libnvidia-compute)' \| head; apt-cache policy nvidia-driver-580 2>/dev/null \| head -12` |
-| V26 | PMC/PubMed presence; ZIM integrity; model folders complete | `ls -la /mnt/models/models/corpus/refs /mnt/models/models/corpus/ted /mnt/models/models/data/research 2>&1 \| head -60; ls -la /mnt/models/models/verify/HHEM-2.1-open /mnt/models/models/verify/prompt-injection-deberta 2>&1 \| head -40` |
+| ~~V26~~ | done: PMC/PubMed presence; ZIM integrity; model folders complete | `ls -la /mnt/models/models/corpus/refs /mnt/models/models/corpus/ted /mnt/models/models/data/research 2>&1 \| head -60; ls -la /mnt/models/models/verify/HHEM-2.1-open /mnt/models/models/verify/prompt-injection-deberta 2>&1 \| head -40` |
+| V27 | Which CUDA/NVIDIA packages are installed and what `apt upgrade` would change; what owns `/usr/sbin/lxc` | `dpkg -l \| grep -E '^ii +(cuda\|nvidia\|libnvidia)' \| awk '{print $2, $3}' \| head -40; apt list --upgradable 2>/dev/null \| grep -i -E 'nvidia\|cuda'; dpkg -S /usr/sbin/lxc` |
 
 
 ## 2. The spine: one structure that makes the wants enforceable
@@ -944,7 +965,7 @@ These assume Jarvis writes most of the code from Claude-written specs, with you 
 | D1 | The permission fence | (a) keep Jarvis's shell as `simon` (today); (b) move it to a new `jarvis` user with full control of its own home and memory, no sudo | (b). It is what makes "never break", the spec gate and the unwritable scorer real. Also decide what of `/home/simon` `jarvis` may **read** (e.g. `~/bench/results`, `~/models` read-only). |
 | D2 | Network exposure (V2/V14: no firewall, 8080/3000/8200/111 on every interface) | Tool server → `172.17.0.1`; 8080 → loopback + docker0; 3000 → loopback + Tailscale; a host firewall (careful: Docker manages its own nft rules) | Bind the tool server now. Then a firewall that allows SSH and Tailscale and drops the LAN on 8080/8200/111. |
 | D3 | Off-box backup target | Backblaze B2 now (restic, encrypted); NAS (ESC4000) later; both | Both: B2 now (pennies for configs, databases, memory, units); NAS as the second copy once it has caddies. Keep the restic password somewhere off the box. |
-| D4 | Freeze the GPU stack | `apt-mark hold` the NVIDIA driver packages; add them to unattended-upgrades' Package-Blacklist | Hold the driver. Kernel updates can stay: DKMS already rebuilt 580 for 6.8.0-142 (MEASURED). |
+| D4 | Freeze the GPU stack (V25: NVIDIA's CUDA repo at priority 600 already offers a replacement driver build) | Hold the nvidia-*-580 packages and the installed CUDA 12.9 packages, or pin the NVIDIA repo | **Hold, soon.** Any manual `apt upgrade` would currently switch driver packaging, and later could pull CUDA 13 / a non-Volta driver. Kernel updates can stay: DKMS already rebuilt 580 for 6.8.0-142 (MEASURED). |
 | D22 | `lxd` group membership (section 1a) | Remove `simon` from `lxd` if LXD is installed (V24); never put `jarvis` in it | Remove, if V24 shows LXD installed. |
 | D23 | Production OOM protection | Give llama-server a strongly negative `OOMScoreAdjust` (and later run it as its own user) | Yes, with the next deliberate production-unit edit (backup + spare-port rule). |
 | D5 | HF token on the model drive | Revoke and re-issue, or keep | Revoke (it is plain text and readable by any user). |
