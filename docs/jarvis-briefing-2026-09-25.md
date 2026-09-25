@@ -89,7 +89,7 @@ Also on the box now: ~/sm70-attn (flash-attention fork for V100, separate build,
 A 4 TB USB drive (Seagate SkyHawk, NTFS), D:\models, on Simon's Windows PC (desktop-9ii55td) at the fast house, driven by D:\models\CHAIN.ps1 (logs in D:\models\_logs\chain.log). As of Sep 24 14:00Z about 1,821 GB was done:
 - pull.py DONE: HauhauCS uncensored Qwen3.8-27B Q5_K_P + FastMTP-32K draft + its patch, HauhauCS IQ4_XS; Qwen3.8-Flash-Next (ISTA-DASLab GSQ-RCO IQ3_XXS and Q2_0, unsloth UD-Q4_K_XL, unsloth MTP/ folder); GLM-5.3-Flash UD-Q4_K_XL; GLM-5.3 full UD-Q4_K_XL; MiMo-V2.6-Pro-RL MXFP4 (2 raw parts) + DFlash-Q8_0 draft; gpt-oss-20b.
 - pull_extras DONE: Wan 2.2 / LTX 2.5 / HunyuanVideo 1.5 video models, Z-Image, Qwen3-Coder-Next, embedding/reranker/OCR/ASR models. pull_hq mostly done (upscalers).
-- Running or queued then: addendum (Qwen3-VL-32B, Kokoro, audio models), corpora (Wikipedia, PMC, PubMed, arXiv, Gutenberg, etc.), data, wants, wheels, pull_orch (Jackrong Qwen3.8-27B-MTP Q3_K_M + Q4_K_M, HHEM-2.1-Open, Qwen3-VL-4B, deberta prompt-injection, Qwen3Guard-Gen-4B, Qwen3-1.7B router, Qwen3.8-2B distill), pull_research (Qwen3-Reranker-4B, Qwen3-VL-Reranker-2B, SimpleQA, RAGTruth, FRAMES, HotpotQA, MuSiQue, docling). Final state unknown — ask Simon.
+- Running or queued then: addendum (Qwen3-VL-32B, Kokoro, audio models), corpora (Wikipedia, PMC, PubMed, arXiv, Gutenberg, etc.), data, wants, wheels, pull_orch (the Hugging Face repo Jackrong/Qwen3.8-27B-MTP-GGUF, quants Q3_K_M + Q4_K_M — Jackrong is the uploader name, HHEM-2.1-Open, Qwen3-VL-4B, deberta prompt-injection, Qwen3Guard-Gen-4B, Qwen3-1.7B router, Qwen3.8-2B distill), pull_research (Qwen3-Reranker-4B, Qwen3-VL-Reranker-2B, SimpleQA, RAGTruth, FRAMES, HotpotQA, MuSiQue, docling). Final state unknown — ask Simon.
 Nothing from this drive is on jarvis-1 yet (VERIFY).
 
 ### Handling that drive (it holds downloads that took days)
@@ -125,7 +125,7 @@ Join the two raw parts on the 990 PRO (needs ~634 GB free): cat MiMo-V2.6-Pro-RL
 Same base model as production, so the tuned flags carry over. Needs both GPUs, so it swaps with production (~3 min each way). Its FastMTP-32K draft REQUIRES HauhauCS-FastMTP-llama.cpp.patch (else a 248320 vs 32768 vocab mismatch), pinned to llama.cpp commit 4df29be4f4c3673f428170fda944a5b19f743bb8 — a separate build. IQ4_XS (14.63 GiB) fits one card as a fallback. Its quality and "0 refusals" claims are unverified. It never gets the shell tool or secrets.
 
 ### Freeing a GPU (the re-layout plan)
--sm layer uses one card at a time, so a 27B that fits ONE card loses little speed and frees the other V100. Plan: A/B Jackrong Qwen3.8-27B-MTP Q3_K_M (12.57 GiB) on port 8081 against production; check its MTP tensors first. If it works, GPU1 is free for video or a second model.
+-sm layer uses one card at a time, so a 27B that fits ONE card loses little speed and frees the other V100. Plan: A/B the Q3_K_M file from the Hugging Face repo Jackrong/Qwen3.8-27B-MTP-GGUF (12.57 GiB) on port 8081 against production; check its MTP tensors first. If it works, GPU1 is free for video or a second model.
 
 ### Model rankings to remember (Artificial Analysis index v4.3.2, ceiling 53)
 MiMo-V2.6-Pro 46, GLM-5.3 45, GLM-5.3-Flash 42, Qwen3.8-Flash-Next 40, DeepSeek V4.1 Flash 39, Qwen3.8-27B 34, Qwen3-Coder-Next 9. Rank models by the score AT THE QUANT THAT FITS, not at full precision. Terminal-Bench 4.0: 27B only 6% → never route shell-agent work to the 27B. Every local model hallucinates confidently (27B AA-Omniscience -10) → ground factual claims in retrieval, never model memory. Never compare SWE-bench Verified with SWE-bench Pro.
@@ -176,7 +176,7 @@ q8_0 KV on production; draft-n-max above 5; ngram-mod + MTP; even tensor split; 
 4. When the drive comes home: safe eject, mount ntfs3, rsync + checksum, join MiMo, run gpt-oss-20b, test Flash-Next (with -lv 4), then GLM-5.3, then MiMo.
 5. Rebuild the state/job/notify stack if it is gone, with the GAP 1 health check covering Open WebUI on port 3000.
 6. Router + HHEM + embedding/reranker as CPU units; then the research pipeline.
-7. Jackrong single-card A/B to free a GPU; then video.
+7. Single-card A/B with the Jackrong/Qwen3.8-27B-MTP-GGUF Q3_K_M file to free a GPU; then video.
 8. A plug-in energy meter to size a UPS (a 900 W UPS is too small at full load).
 
 END OF BRIEFING
