@@ -11,7 +11,8 @@ Status lives in ~/jarvis-build/PROGRESS.md, not here.
 | J2b | delegate fix-up: 8000 cap, empty answer at cap, ~ paths, log location | 08-spec-delegate-tool.md (J2b section) | Jarvis via create_tool |
 | J2c | Live check P4b: do the two slots share one KV pool? | 08-spec-delegate-tool.md (J2c section) | Simon drives, Jarvis records |
 | J4 | replace_in_file tool: exact small edits without shell quoting | 10-spec-edit-tool.md | Jarvis via create_tool; Simon adds one line to the Builder prompt |
-| J3 | Context proxy v2: BUILT BY CLAUDE in ~/jarvis-build/ctxproxy (51 tests). Do NOT rebuild or edit it. Only help Simon run ctxproxy/README.md when he asks | ctxproxy/README.md | Simon installs and runs the acceptance runs |
+| J3 | Context proxy v2.1: BUILT BY CLAUDE in ~/jarvis-build/ctxproxy (compaction + NEW CHAT START note). Do NOT rebuild or edit it. Only help Simon run ctxproxy/README.md when he asks | ctxproxy/README.md | Simon installs and runs the acceptance runs |
+| AP | Autopilot: BUILT BY CLAUDE in ~/jarvis-build/autopilot. Runs one approved task with no one typing "continue". Do NOT edit or stop it | autopilot/README.md | Simon starts each run |
 | B1 | Backup to the USB model drive (config.real.env, remount rw/ro in the unit, FOR SIMON) | Simon's message; use delegate for the mount-namespace question | Simon runs FOR SIMON |
 | S2 | Health watchdog (alerts when something is MISSING), dry-run tested | 03-spec-watchdog.md | Simon installs the unit |
 | S3 | Job database + job API with the spec-approval gate, tested on 127.0.0.1:8111 | 04-spec-jobdb.md | Simon installs the unit later |

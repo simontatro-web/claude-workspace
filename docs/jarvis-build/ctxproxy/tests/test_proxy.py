@@ -90,7 +90,7 @@ def mkproxy(upstream, tmp_path):
             prog.write_text(progress)
         kw = dict(upstream=upstream, state_dir=str(tmp_path / "state"), progress_path=str(prog),
                   overhead_pct=0.0, per_msg_tokens=0, tools_extra_tokens=0, tokenize_timeout_s=1.0,
-                  summary_timeout_s=1.5)
+                  summary_timeout_s=1.5, resume_new_chats=False, git_dir="")  # the R* tests turn these on
         kw.update(over)
         cfg = px.Config(**kw)
         app = px.build_app(cfg)
@@ -796,3 +796,190 @@ def test_X12_multibyte_cut_is_valid(mkproxy):
     out = last_fwd()["messages"][-1]["content"]
     out.encode("utf-8")
     assert "CUT BY CONTEXT PROXY" in out
+
+
+# ================================================================ NEW CHAT START note (resume) + git facts
+
+import subprocess  # noqa: E402
+
+
+@pytest.fixture
+def gitrepo(tmp_path):
+    d = tmp_path / "repo"
+    d.mkdir()
+
+    def g(*a):
+        subprocess.run(["git", "-C", str(d), "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                       check=True, capture_output=True)
+    g("init", "-q")
+    (d / "a.txt").write_text("a\n")
+    g("add", "-A")
+    g("commit", "-q", "-m", "first commit SUBJECTONE")
+    (d / "b.txt").write_text("b\n")
+    g("add", "b.txt")
+    g("commit", "-q", "-m", "second commit SUBJECTTWO")
+    (d / "dirty.txt").write_text("x\n")
+    return d
+
+
+def sys_text(body):
+    return px.content_text(body["messages"][0]["content"])
+
+
+def test_R1_new_chat_gets_note(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    body = {"model": "m", "messages": [msg("system", 100), msg("user", 20)]}
+    fu.RECORDED.clear()
+    assert post(base, body).status_code == 200
+    got = last_fwd()
+    t = sys_text(got)
+    assert t.startswith(body["messages"][0]["content"] + "\n\nNEW CHAT START")
+    assert "do edit 08" in t and "older stuff" not in t
+    assert "SUBJECTTWO" in t and "SUBJECTONE" in t and "?? dirty.txt" in t
+    assert got["messages"][1:] == body["messages"][1:]
+    ev = wait_events(cfg, 1)[-1]
+    assert ev["action"] == "resume" and ev["resume"] == "new" and ev["resume_tokens"] > 50
+    assert ev["tok_after"] == fwd_count(got), "the note must be counted"
+    raw = open(os.path.join(cfg.state_dir, "events.jsonl")).read()
+    assert "SUBJECT" not in raw and "edit 08" not in raw
+
+
+def test_R2_note_frozen_for_the_whole_chat(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    msgs = [msg("system", 100), msg("user", 20)]
+    post(base, {"model": "m", "messages": msgs})
+    first = last_fwd()["messages"][0]
+    (gitrepo / "later.txt").write_text("changed after the chat started\n")
+    for i in range(3):
+        msgs += tool_pair(i, 50)
+        post(base, {"model": "m", "messages": msgs})
+        cur = last_fwd()
+        assert cur["messages"][0] == first
+        assert cur["messages"][1:] == msgs[1:]
+    acts = [(e["action"], e.get("resume")) for e in wait_events(cfg, 4)]
+    assert acts == [("resume", "new")] + [("resume", "sticky")] * 3
+
+
+def test_R3_same_opener_later_chat_does_not_swap_note(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    opener = [msg("system", 100), msg("user", 20)]
+    a = list(opener)
+    post(base, {"model": "m", "messages": a})
+    note_a = last_fwd()["messages"][0]
+    a += tool_pair(0, 30)
+    post(base, {"model": "m", "messages": a})
+    (gitrepo / "between.txt").write_text("x\n")
+    b = list(opener)
+    post(base, {"model": "m", "messages": b})
+    note_b = last_fwd()["messages"][0]
+    assert note_b != note_a and "between.txt" in px.content_text(note_b["content"])
+    a += tool_pair(1, 30)
+    post(base, {"model": "m", "messages": a})
+    assert last_fwd()["messages"][0] == note_a
+    b += tool_pair(5, 30)
+    post(base, {"model": "m", "messages": b})
+    assert last_fwd()["messages"][0] == note_b
+
+
+def test_R4_opt_out_header_and_config_off(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    body = {"model": "m", "messages": [msg("system", 100), msg("user", 20)]}
+    post(base, body, headers={"X-Ctxproxy-No-Resume": "1"})
+    assert fu.RECORDED[-1]["body"] == body
+    assert "x-ctxproxy-no-resume" not in fu.RECORDED[-1]["headers"]
+    base2, _, cfg2, _ = mkproxy(resume_new_chats=False, git_dir=str(gitrepo))
+    post(base2, body)
+    assert last_fwd() == body
+
+
+def test_R5_chat_older_than_the_proxy_is_left_alone(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    msgs = [msg("system", 100), msg("user", 20)] + tool_pair(0, 30)
+    post(base, {"model": "m", "messages": msgs})
+    assert last_fwd()["messages"] == msgs
+    assert wait_events(cfg, 1)[-1]["action"] == "pass"
+
+
+def test_R6_compaction_replaces_note_and_has_git_facts(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    msgs = [msg("system", 100), msg("user", 60)]
+    post(base, {"model": "m", "messages": msgs})
+    i = 0
+    while True:
+        msgs += tool_pair(i, 700)
+        i += 1
+        post(base, {"model": "m", "messages": msgs})
+        if wait_events(cfg, i + 1)[-1]["action"] == "compact":
+            break
+        assert i < 60
+    got = last_fwd()
+    t = all_text(got)
+    check_structure(got)
+    assert t.count("CONTEXT COMPACTED") == 1 and "NEW CHAT START" not in t
+    assert "SUBJECTTWO" in t and "?? dirty.txt" in t and "do edit 08" in t
+    assert events(cfg)[-1]["resume"] == "replaced"
+    msgs += tool_pair(999, 50)
+    post(base, {"model": "m", "messages": msgs})
+    assert last_fwd()["messages"][0] == got["messages"][0]
+    assert "NEW CHAT START" not in all_text(last_fwd())
+
+
+def test_R7_git_unavailable_still_works(mkproxy, tmp_path):
+    notrepo = tmp_path / "notrepo"
+    notrepo.mkdir()
+    for d in (str(notrepo), str(tmp_path / "missing")):
+        base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=d)
+        body = {"model": "m", "messages": [msg("system", 100), msg("user", 20, word=os.path.basename(d))]}
+        assert post(base, body).status_code == 200
+        t = sys_text(last_fwd())
+        assert "NEW CHAT START" in t and "unavailable" in t and "do edit 08" in t
+
+
+def test_R8_restart_keeps_the_note(mkproxy, gitrepo):
+    base, proxy, cfg, srv = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    msgs = [msg("system", 100), msg("user", 20)]
+    post(base, {"model": "m", "messages": msgs})
+    first = last_fwd()["messages"][0]
+    srv.stop()
+    (gitrepo / "after-restart.txt").write_text("x\n")
+    base2, proxy2, cfg2, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    msgs += tool_pair(0, 30)
+    post(base2, {"model": "m", "messages": msgs})
+    assert last_fwd()["messages"][0] == first
+    assert wait_events(cfg2, 2)[-1]["resume"] == "sticky"
+
+
+def test_R9_no_system_message_gets_one(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    body = {"model": "m", "messages": [msg("user", 20)]}
+    post(base, body)
+    got = last_fwd()
+    assert got["messages"][0]["role"] == "system" and "NEW CHAT START" in sys_text(got)
+    assert got["messages"][1:] == body["messages"]
+
+
+def test_R10_missing_progress_file(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(progress=None, resume_new_chats=True, git_dir=str(gitrepo))
+    post(base, {"model": "m", "messages": [msg("system", 100), msg("user", 20)]})
+    t = sys_text(last_fwd())
+    assert "No RESUME HERE block found" in t and "SUBJECTTWO" in t
+
+
+def test_R11_note_counts_toward_warn(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    body = {"model": "m", "messages": [msg("system", cfg.warn_at - 70), msg("user", 20)]}
+    assert fwd_count(body) < cfg.warn_at
+    post(base, body)
+    got = last_fwd()
+    assert "NEW CHAT START" in sys_text(got)
+    assert "CONTEXT HIGH" in px.content_text(got["messages"][-1]["content"])
+    ev = wait_events(cfg, 1)[-1]
+    assert ev["warned"] and ev["action"] == "resume"
+
+
+def test_R12_task_requests_still_skipped(mkproxy, gitrepo):
+    base, proxy, cfg, _ = mkproxy(resume_new_chats=True, git_dir=str(gitrepo))
+    body = {"model": "m", "messages": [msg("system", 50), {"role": "user", "content": "### Task:\nMake a title"}]}
+    post(base, body)
+    assert last_fwd() == body
+    assert wait_events(cfg, 1)[-1]["action"] == "skip"

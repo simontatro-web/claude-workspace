@@ -6,6 +6,11 @@ compactions); a stale RESUME HERE block is kept AND an auto-summary is added; th
 the last user/tool message (not a separate system message, which Qwen templates may reject); the compacted
 note is appended to the first system message; a broken or timed-out stream ends with an SSE error event;
 optional client key (CTXPROXY_CLIENT_KEY). README.md is the runbook.
+v2.1 (2026-09-25): the first request of a new chat gets a NEW CHAT START note (RESUME HERE block + `git log
+--oneline -5` + `git status --short` of ~/jarvis-build) appended to the system message, frozen for that chat
+(resumes.json); the compaction note carries the same git facts. Header X-Ctxproxy-No-Resume: 1 or
+CTXPROXY_RESUME_NEW_CHATS=0 turns the new-chat note off. The autopilot (~/jarvis-build/autopilot) drives
+Builder tasks through this proxy with no one typing "continue".
 
 Goal: Jarvis Builder never overflows and never needs Simon to start a new chat. A small proxy sits between Open WebUI and llama-server and sees EVERY model request, including each round of a tool loop, so it can act mid-turn (a filter only runs when Simon sends a message).
 

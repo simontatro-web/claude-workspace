@@ -4,8 +4,10 @@
 Sits between Open WebUI and llama-server. Every chat request (each round of a
 tool loop included) is counted; near the limit it adds a CONTEXT HIGH note,
 over the limit it compacts to a frozen, sticky view so the prompt cache keeps
-working. Everything else is forwarded unchanged. Fails open, but never forwards
-a request that cannot fit.
+working. The first request of a new chat gets a NEW CHAT START note (the
+RESUME HERE block plus git facts), frozen for the rest of that chat.
+Everything else is forwarded unchanged. Fails open, but never forwards a
+request that cannot fit.
 
 Run: python proxy.py  (settings from environment, see Config)
 """
@@ -15,6 +17,7 @@ import hashlib
 import json
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -39,6 +42,10 @@ HOME = os.path.expanduser("~")
 def _env(name, default, cast=str):
     v = os.environ.get("CTXPROXY_" + name)
     return default if v is None or v == "" else cast(v)
+
+
+def _bool(v):
+    return str(v).strip().lower() not in ("0", "false", "no", "off", "")
 
 
 @dataclass
@@ -71,6 +78,13 @@ class Config:
     summary_max_tokens: int = field(default_factory=lambda: _env("SUMMARY_MAX_TOKENS", 800, int))
     summary_input_tokens: int = field(default_factory=lambda: _env("SUMMARY_INPUT_TOKENS", 12000, int))
 
+    # A new chat's first request gets a NEW CHAT START note (RESUME HERE + git facts), kept identical
+    # for the rest of that chat. Per request: header "X-Ctxproxy-No-Resume: 1" turns it off.
+    resume_new_chats: bool = field(default_factory=lambda: _env("RESUME_NEW_CHATS", True, _bool))
+    # Repo whose `git log --oneline -5` and `git status --short` go into both notes ("" = none).
+    git_dir: str = field(default_factory=lambda: _env("GIT_DIR", HOME + "/jarvis-build"))
+    git_timeout_s: float = field(default_factory=lambda: _env("GIT_TIMEOUT_S", 3.0, float))
+
     tokenize_timeout_s: float = field(default_factory=lambda: _env("TOKENIZE_TIMEOUT_S", 3.0, float))
     connect_timeout_s: float = field(default_factory=lambda: _env("CONNECT_TIMEOUT_S", 5.0, float))
     read_timeout_s: float = field(default_factory=lambda: _env("READ_TIMEOUT_S", 300.0, float))
@@ -97,7 +111,7 @@ class Config:
 
 HOP_HEADERS = {"host", "content-length", "transfer-encoding", "connection", "keep-alive",
                "proxy-authenticate", "proxy-authorization", "te", "trailer", "upgrade",
-               "accept-encoding", "x-ctxproxy-skip"}
+               "accept-encoding", "x-ctxproxy-skip", "x-ctxproxy-no-resume"}
 RESP_DROP = {"content-length", "transfer-encoding", "connection", "keep-alive", "content-encoding"}
 
 
@@ -172,12 +186,15 @@ class Proxy:
         self.client = None
         self.tok_cache = OrderedDict()
         self.states = OrderedDict()  # prefix hash -> state dict
+        self.resumes = OrderedDict()  # chat-root hash -> NEW CHAT START note
         self.events_lock = threading.Lock()
         self.tokenize_ok = True
         os.makedirs(cfg.state_dir, exist_ok=True)
         self.state_path = os.path.join(cfg.state_dir, "state.json")
+        self.resume_path = os.path.join(cfg.state_dir, "resumes.json")
         self.events_path = os.path.join(cfg.state_dir, "events.jsonl")
         self._load_state()
+        self._load_resumes()
 
     # ---- state persistence
     def _load_state(self):
@@ -202,6 +219,29 @@ class Proxy:
             os.replace(tmp, self.state_path)
         except Exception as e:
             print(f"ctxproxy: cannot save state ({type(e).__name__})", file=sys.stderr)
+
+    def _load_resumes(self):
+        try:
+            with open(self.resume_path, encoding="utf-8") as f:
+                data = json.load(f)
+            for k, v in data.items():
+                if isinstance(v, dict) and "note" in v and "note_tokens" in v:
+                    self.resumes[k] = v
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"ctxproxy: resumes.json unreadable, starting empty ({type(e).__name__})", file=sys.stderr)
+
+    def _save_resumes(self):
+        while len(self.resumes) > self.cfg.max_states:
+            self.resumes.popitem(last=False)
+        tmp = self.resume_path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.resumes, f, ensure_ascii=False)
+            os.replace(tmp, self.resume_path)
+        except Exception as e:
+            print(f"ctxproxy: cannot save resumes ({type(e).__name__})", file=sys.stderr)
 
     # ---- events (metadata only, never message text or headers)
     def event(self, **kw):
@@ -327,6 +367,55 @@ class Proxy:
             out = out[:self.cfg.handoff_max_chars] + "\n[handoff cut at %d chars]" % self.cfg.handoff_max_chars
         return out, st.st_mtime
 
+    def git_facts(self):
+        """Last 5 commits and uncommitted files of cfg.git_dir, read-only. None if disabled."""
+        d = self.cfg.git_dir
+        if not d:
+            return None
+        shown = d.replace(HOME, "~", 1) if d.startswith(HOME) else d
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        env.update({"GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C"})
+
+        def git(*args):
+            r = subprocess.run(["git", "--no-optional-locks", "-C", d, *args], capture_output=True, text=True,
+                               timeout=self.cfg.git_timeout_s, env=env, errors="replace")
+            if r.returncode != 0:
+                first = (r.stderr or "").strip().splitlines()
+                raise RuntimeError(first[0][:160] if first else f"git exit {r.returncode}")
+            return [ln[:200] for ln in r.stdout.splitlines()]
+
+        try:
+            log = git("log", "--oneline", "-5") or ["(no commits yet)"]
+            status = git("status", "--short")
+        except FileNotFoundError:
+            return f"Git facts for {shown}: unavailable (git not found)."
+        except subprocess.TimeoutExpired:
+            return f"Git facts for {shown}: unavailable (git timed out)."
+        except Exception as e:
+            return f"Git facts for {shown}: unavailable ({e})."
+        if len(status) > 15:
+            status = status[:15] + [f"... and {len(status) - 15} more"]
+        return (f"Last commits in {shown} (git log --oneline -5):\n" + "\n".join(log) +
+                f"\nUncommitted changes in {shown} (git status --short):\n" +
+                ("\n".join(status) if status else "(none, working tree clean)"))
+
+    async def build_resume_note(self, headers):
+        handoff, mtime = self.read_handoff()
+        facts = await asyncio.to_thread(self.git_facts)
+        shown = self.cfg.progress_path.replace(HOME, "~", 1)
+        parts = [f"NEW CHAT START note from the context proxy ({now_chicago()}). Your saved state:"]
+        if handoff:
+            parts.append(f"RESUME HERE block of {shown} (last changed {now_chicago(mtime)}):\n{handoff}")
+        else:
+            parts.append(f"No RESUME HERE block found in {shown}.")
+        if facts:
+            parts.append(facts)
+        parts.append("Continue from the exact next action above unless Simon's message says otherwise. "
+                     "Re-check any fact with a tool before relying on it. Never redo committed work.")
+        note = "\n".join(parts)
+        note_tokens = (await self.count_texts([note], headers))[0]
+        return {"note": note, "note_tokens": note_tokens, "created": round(time.time())}
+
     async def auto_summary(self, removed, removed_counts, headers):
         c = self.cfg
         picked, used = [], 0
@@ -364,7 +453,7 @@ class Proxy:
             return None, "summary_" + type(e).__name__
 
     # ---- the core transform
-    async def transform(self, body, headers):
+    async def transform(self, body, headers, no_resume=False):
         """Returns (new_body or None if unchanged, info dict)."""
         c = self.cfg
         info = {}
@@ -419,18 +508,42 @@ class Proxy:
                 state = st
                 break
 
+        # new-chat note: frozen per chat, so every later request of the chat gets the same prefix
+        resume = None
+        if state is None and c.resume_new_chats and not no_resume and rest and rest[0].get("role") == "user":
+            if len(rest) == 1:
+                resume = await self.build_resume_note(headers)
+                self.resumes[chain[1]] = resume
+                self.resumes.move_to_end(chain[1])
+                self._save_resumes()
+                info["resume"] = "new"
+            else:
+                # chain[2] (opener + first reply) wins over chain[1], so a later chat that starts
+                # with the same opener cannot swap this chat's note
+                resume = self.resumes.get(chain[2]) or self.resumes.get(chain[1])
+                if resume is not None:
+                    if chain[2] not in self.resumes:
+                        self.resumes[chain[2]] = resume
+                        self._save_resumes()
+                    info["resume"] = "sticky"
+            if resume is not None:
+                info["resume_tokens"] = resume["note_tokens"]
+
         def render(st):
-            if st is None:
+            if st is None and resume is None:
                 return list(lead_sys), list(cut_rest), list(sys_counts), list(rest_counts)
-            note = st["note"]
+            src = st if st is not None else resume
+            note = src["note"]
             if lead_sys:
                 first = dict(lead_sys[0])
                 first["content"] = append_text(first.get("content"), "\n\n" + note)
                 s_msgs = [first] + list(lead_sys[1:])
-                s_counts = [sys_counts[0] + st["note_tokens"]] + list(sys_counts[1:])
+                s_counts = [sys_counts[0] + src["note_tokens"]] + list(sys_counts[1:])
             else:
                 s_msgs = [{"role": "system", "content": note}]
-                s_counts = [st["note_tokens"]]
+                s_counts = [src["note_tokens"]]
+            if st is None:
+                return s_msgs, list(cut_rest), s_counts, list(rest_counts)
             k = st["cut"]
             r_msgs, r_counts = [], []
             pin = st.get("pin")
@@ -443,7 +556,7 @@ class Proxy:
 
         s_msgs, r_msgs, s_counts, r_counts = render(state)
         now_tok = self.total(s_counts + r_counts, tools_count)
-        action = "sticky" if state else ("cut" if cut_n else "pass")
+        action = "sticky" if state else ("resume" if resume else ("cut" if cut_n else "pass"))
 
         if now_tok >= c.compact_at:
             if c.fault == "compact":
@@ -459,6 +572,8 @@ class Proxy:
                 now_tok = self.total(s_counts + r_counts, tools_count)
                 action = "compact"
                 info["handoff"] = why
+                if "resume" in info:
+                    info["resume"] = "replaced"
 
         warned = False
         if now_tok >= c.warn_at:
@@ -531,8 +646,9 @@ class Proxy:
         else:
             handoff_text = f"RESUME HERE block (last changed {now_chicago(mtime)}):\n{handoff}"
 
+        facts = await asyncio.to_thread(self.git_facts)
         note = (f"CONTEXT COMPACTED by the context proxy at {now_chicago()}. Earlier messages of this chat were "
-                "removed from your view.\n" + handoff_text +
+                "removed from your view.\n" + handoff_text + ("\n" + facts if facts else "") +
                 "\nContinue from the exact next action above. Re-check any fact with a tool before relying on it. "
                 "Do not redo committed work: check `git log --oneline -5` first.")
         note_tokens = (await self.count_texts([note], headers))[0]
@@ -714,7 +830,9 @@ def build_app(cfg: Config = None):
             info["action"] = "skip"
             return await forward(request, body_bytes, info, t0)
         try:
-            new_body, tinfo = await proxy.transform(body, fwd_headers(dict(request.headers), cfg))
+            no_resume = request.headers.get("x-ctxproxy-no-resume") == "1"
+            new_body, tinfo = await proxy.transform(body, fwd_headers(dict(request.headers), cfg),
+                                                    no_resume=no_resume)
             info.update(tinfo)
         except TooLarge as e:
             info.update({"action": "too_large", "tok_after": e.args[0]})
@@ -749,7 +867,8 @@ def build_app(cfg: Config = None):
 
     async def health(request: Request):
         return JSONResponse({"ok": True, "compact_at": cfg.compact_at, "warn_at": cfg.warn_at,
-                             "states": len(proxy.states)})
+                             "states": len(proxy.states), "resume_new_chats": cfg.resume_new_chats,
+                             "resumes": len(proxy.resumes)})
 
     routes = [
         Route("/ctxproxy/health", health, methods=["GET"]),

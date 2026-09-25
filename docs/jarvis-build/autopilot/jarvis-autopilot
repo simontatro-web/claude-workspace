@@ -1,0 +1,61 @@
+#!/bin/bash
+# jarvis-autopilot: start, watch and stop autopilot runs (see ~/jarvis-build/autopilot/README.md).
+# Simon installs it root-owned in /usr/local/bin, so Jarvis cannot edit it. It runs as Simon and uses sudo
+# only for systemd-run (so a run survives logout) and systemctl stop. The run itself is User=simon.
+set -euo pipefail
+U=simon
+H=${JARVIS_HOME:-/home/$U}
+JB=$H/jarvis-build
+PY=$JB/venv/bin/python
+AP=$JB/autopilot/autopilot.py
+PAUSE=$JB/autopilot/PAUSE
+UNIT=jarvis-autopilot
+
+run() { if [ "${DRY_RUN:-}" = 1 ]; then printf '%q ' "$@"; echo; else "$@"; fi; }
+
+precheck() {
+  if [ "${DRY_RUN:-}" != 1 ] && systemctl is-active --quiet "$UNIT"; then
+    echo "a run is already active. See: jarvis-autopilot status"; exit 1
+  fi
+  if [ -e "$PAUSE" ]; then
+    echo "the PAUSE file is present; remove it first: jarvis-autopilot resume"; exit 1
+  fi
+}
+
+start() {
+  run sudo systemd-run --unit="$UNIT" --collect -p User="$U" -p Group="$U" -p WorkingDirectory="$JB" \
+    "$PY" "$AP" "$@"
+  echo "started. Watch: jarvis-autopilot status | follow. Stop: jarvis-autopilot pause (gentle) or stop (now)."
+}
+
+cmd=${1:-help}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  check)  run "$PY" "$AP" --check ;;
+  status) run "$PY" "$AP" --status ;;
+  acceptance)
+    precheck
+    if [ "${1:-}" = "--keep" ]; then shift; else run python3 "$JB/ctxproxy/live/setup_task.py" --reset; fi
+    start --task-file "$JB/autopilot/tasks/acceptance.md" --repo "$H/ctxtest" \
+          --verify "python3 $JB/ctxproxy/live/check_task.py" "$@" ;;
+  next-step) precheck; start --task-file "$JB/autopilot/tasks/next-step.md" "$@" ;;
+  task)   [ $# -ge 1 ] || { echo "usage: jarvis-autopilot task FILE [options]"; exit 2; }
+          precheck; f=$1; shift; start --task-file "$f" "$@" ;;
+  follow) last=$(ls -d "$JB"/autopilot/runs/*/ 2>/dev/null | tail -1)
+          [ -n "$last" ] || { echo "no runs yet"; exit 1; }
+          run tail -n 40 -f "${last}transcript.md" ;;
+  pause)  run touch "$PAUSE"; echo "PAUSE set: the run stops before its next model or tool call." ;;
+  resume) run rm -f "$PAUSE"; echo "PAUSE removed." ;;
+  stop)   run sudo systemctl stop "$UNIT" ;;
+  *) cat <<'HELP_END'
+jarvis-autopilot check                  preflight (read-only)
+jarvis-autopilot acceptance [--keep]    reset ~/ctxtest (unless --keep) and run the 25-edit acceptance task
+jarvis-autopilot next-step [options]    run the next unfinished step of 01-steps.md (add --allow-create-tool for J2b/J4)
+jarvis-autopilot task FILE [options]    run any task file
+jarvis-autopilot status                 the latest run: state, counts, last transcript lines
+jarvis-autopilot follow                 watch the transcript live (Ctrl-C stops watching, not the run)
+jarvis-autopilot pause | resume         gentle stop before the next call | allow runs again
+jarvis-autopilot stop                   stop the run now
+HELP_END
+  ;;
+esac

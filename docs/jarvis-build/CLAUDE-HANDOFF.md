@@ -41,68 +41,88 @@ yourself in this repo; Simon runs everything on the box and pastes you the outpu
   in docs/orchestrator-wants-simon-2026-09-25.md), decisions D1-D23, buy list. The roadmap may have been edited
   by something else; the file on disk is current.
 - docs/jarvis-build/: the build handoff Jarvis reads (00-START-HERE, 01-steps, specs 02-10).
-- docs/jarvis-build/ctxproxy/: the J3 context proxy, BUILT BY CLAUDE and tested off-box:
-  proxy.py, tests/ (51 tests, fake llama-server), smoke_real.py (real-server checks), report.py (events
+- docs/jarvis-build/ctxproxy/: the J3 context proxy v2.1, BUILT BY CLAUDE and tested off-box:
+  proxy.py, tests/ (63 tests, fake llama-server), smoke_real.py (8 real-server checks), report.py (events
   summary, suggests RESERVE), live/setup_task.py + check_task.py (25-edit acceptance task and grader),
   ctxproxy.service, README.md (the install and acceptance runbook; read it first).
-- docs/jarvis-build/ctxproxy-bundle.tgz: what Simon installs; sha256
-  4758c4fbc17ec6e6636b3ddda62103f6af9b6e65512272c49208831065fd1628. If you change any ctxproxy file,
-  rebuild it the same way (tar --sort=name --mtime='2026-09-25 00:00Z' --owner=0 --group=0 --numeric-owner,
-  containing ctxproxy/ and handoff/01-steps.md + handoff/09-spec-context-compactor.md), re-run the tests from
-  a clean extract, and give Simon the new checksum.
+- docs/jarvis-build/autopilot/: BUILT BY CLAUDE. autopilot.py runs one approved task with nobody typing
+  "continue" (through the proxy, tools via the tool server's OpenAPI, seatbelt, limits, PAUSE, fresh chat for
+  the same run when a chat gets too long, DONE checked with git + --verify, transcript/events/summary in
+  runs/<id>/, optional ntfy). jarvis-autopilot = the root-owned command Simon installs in /usr/local/bin.
+  tasks/ (acceptance, next-step, seatbelt-test), tests/ (131 tests: scripted fake model, fake OpenAPI tool
+  server running real commands in a temp git repo, one test through the real proxy, CLI SIGTERM/lock, wrapper
+  dry-run). README.md is its runbook (install, key, check, gates AP-1..AP-4, real work).
+- docs/jarvis-build/07-builder-prompt.md is Builder prompt v2 (STATUS: DONE/BLOCKED lines, no turn budget,
+  NEW CHAT START / CONTEXT HIGH / CONTEXT COMPACTED rules, AUTOPILOT meaning). The autopilot reads it from
+  ~/jarvis-build/handoff/07-builder-prompt.md, so the chat preset and the autopilot share one prompt.
+- docs/jarvis-build/jarvis-build-bundle.tgz: what Simon installs (replaces ctxproxy-bundle.tgz, removed);
+  sha256 80ee0c6fd046bdeeaf1f5aa008ff22afb87984fc1e935060bb1753a4c7e76697. Contains ctxproxy/, autopilot/,
+  handoff/00-START-HERE.md, 01-steps.md, 07-builder-prompt.md, 09-spec-context-compactor.md. Rebuild it the
+  same way (staging dir, no __pycache__, files 644 except autopilot/jarvis-autopilot 755, tar --sort=name
+  --mtime='2026-09-25 00:00Z' --owner=0 --group=0 --numeric-owner), re-run both suites from a clean extract,
+  and give Simon the new checksum.
 
 ## Proxy design in one paragraph (details in proxy.py and README.md)
 Open WebUI -> 172.17.0.1:8090 -> 127.0.0.1:8080. Counts messages + tools via /tokenize (cached; len//3 fallback).
+First request of a new chat (one non-system message): appends a NEW CHAT START note (RESUME HERE block + `git log
+--oneline -5` + `git status --short` of CTXPROXY_GIT_DIR, default ~/jarvis-build) to the first system message,
+frozen per chat in resumes.json (keyed by chain[2] once the chat has a reply, else chain[1]); header
+X-Ctxproxy-No-Resume or CTXPROXY_RESUME_NEW_CHATS=0 turns it off; a chat that started before the proxy gets none.
 warn_at 14576: appends a CONTEXT HIGH note to the last user/tool message. compact_at 17576 (= 24576 - RESERVE 6000
 - 1000): keeps system + a frozen CONTEXT COMPACTED note (RESUME HERE block of PROGRESS.md, or auto-summary if
-missing/older than 30 min) appended to the first system message + pinned last user message + newest whole
-units; result ~11-12k. Sticky: state keyed by a hash chain over non-system messages, so later requests
-(Open WebUI resends full history) get the identical prefix; state.json survives restarts. Messages over 4000
-tokens are cut head 2500 + tail 1000. "### Task:" and X-Ctxproxy-Skip requests pass untouched. Fail-open, but
-a request over limit - 1024 gets a clear 400. events.jsonl: numbers only, rotates at 5 MB.
+missing/older than 30 min, plus the git facts) appended to the first system message (it replaces the NEW CHAT
+START note) + pinned last user message + newest whole units; result ~11-12k. Sticky: state keyed by a hash
+chain over non-system messages, so later requests (Open WebUI resends full history) get the identical prefix;
+state.json survives restarts. Messages over 4000 tokens are cut head 2500 + tail 1000. "### Task:" and
+X-Ctxproxy-Skip requests pass untouched. Fail-open, but a request over limit - 1024 gets a clear 400 (the
+autopilot answers that with a fresh chat for the same run). events.jsonl: numbers only, rotates at 5 MB.
 
-## Where things stand (end of the last session)
-Simon has NOT installed the proxy yet. His next steps (README 1-4): scp + checksum + extract + pip install,
-`venv/bin/python -m pytest -q ctxproxy/tests` (expect 51 passed), `venv/bin/python ctxproxy/smoke_real.py`
-(expect 6/6). He will paste you the output. The two smoke checks that matter most: C3 (our count within 5% of
-llama-server's) and M1 (cache reused after compaction). If C3 under-counts, raise CTXPROXY_OVERHEAD_PCT or
-PER_MSG_TOKENS; if the template rejects the compacted request, change where notes go.
-Checked again 2026-09-25 (MEASURED, Claude's sandbox): the checksum above matches, and a clean extract passes
-51/51 on Python 3.11.15 and 3.12.3. Known gap, fix on the next bundle rebuild: smoke_real.py waits forever if
-127.0.0.1:8113 is already taken (uvicorn's bind error ends its thread; the start loop has no timeout). Until
-then Simon runs a port check first. Run pytest with `-p no:cacheprovider` so ~/jarvis-build gets no
-.pytest_cache. Gate 5 cannot pass before J2b: the 8000 cap makes the xhigh delegate call return nothing.
+## Where things stand (end of the last session, 2026-09-25 evening Chicago)
+Simon asked for Jarvis to continue automatically with no "continue" from him; he is away from his computer and
+told Claude to keep working so it is ready when he is back. Built and pushed: proxy v2.1, the autopilot,
+Builder prompt v2, 00/01/09 updates, MASTER-PLAN Stage A rewritten around them (A1-A10). NOTHING of this is on
+the box yet. His next steps: ctxproxy/README.md 1-4 with jarvis-build-bundle.tgz (expect `194 passed`, smoke
+`8/8 passed`), then README 5-6 (paste Builder prompt v2), then autopilot/README.md 1-5.
+Checked (MEASURED, Claude's sandbox): a simulated box (fresh git repo with old handoff files, fresh venv, latest
+starlette/uvicorn/httpx/pytest) extracts the bundle, passes 194/194 on Python 3.12.3 and 3.11.15, and the gated
+commit (`grep -q "^194 passed"`) leaves `git status` empty. smoke_real.py now exits 2 with a clear message if
+127.0.0.1:8113 is taken; against a fake server it runs all 8 checks (3 fail there by design: no cache, fake
+counts). Run pytest with `-p no:cacheprovider` so ~/jarvis-build gets no .pytest_cache.
+Smoke checks that matter most: C3 (count within 5%), M1 (cache reused after compaction), R2 (new-chat note
+reused). If C3 under-counts, raise CTXPROXY_OVERHEAD_PCT or PER_MSG_TOKENS.
+VERIFY on the box (the tests cannot): the tool server's auth scheme and key location (autopilot README step 2
+asks Simon for `systemctl cat jarvis-run-host-commands`, key redacted); the real operationIds; that llama-server
+streams tool calls in the OpenAI delta format (`jarvis-autopilot check` probes it); how Open WebUI ends long
+tool loops. Gate 5 cannot pass before J2b: the 8000 cap makes the xhigh delegate call return nothing.
+Commits: earlier commits on this branch carry a co-author line naming the model (against Simon's rule); Claude
+told Simon and left history alone. New commits carry only the Claude-Session line.
 
 ## Queue, in order
-Proposed 2026-09-25 and waiting for Simon's OK: MASTER-PLAN.md Stage A reorders items 1-5 below (B1 backup
-alongside the acceptance runs; Builder prompt v2 before them; J2b before gate 5; one regression run at the end).
-Once Simon confirms, follow Stage A there.
-1. Help Simon through ctxproxy README 1-4; fix anything the real server shows; rebuild the bundle if needed.
-2. README 5-6: service install (env file with client key; check container reach to 172.17.0.1:8090),
-   Open WebUI connection, Builder base model -> proxy, Task Model -> direct, context_watch filter OFF on Builder.
-3. README 7 acceptance: 3 PASS runs of the 25-edit task each with >=1 compaction (one with >=2), one
-   interrupted-and-resumed run, gate 5 (P4b: delegate at xhigh while the chat is past ~15k). Read every
-   check_task.py and report.py output; set CTXPROXY_RESERVE from report.py. Until all gates pass, the manual
-   new-chat routine (RESUME HERE) stays the official method.
-4. J2b delegate fix-up (spec: docs/jarvis-build/08-spec-delegate-tool.md, J2b section). Known: the plugin in
-   ~/jarvis-tools/plugins has `_MAX_OUTPUT_TOKENS = 8000` at line 16, which made two xhigh calls return nothing;
-   needs: cap 16000, explicit error on finish_reason "length" with empty answer, expanduser on paths, log to
-   ~/jarvis-build/logs/ with metadata only, X-Ctxproxy-Skip header, move test leftovers
-   (delegate-log.jsonl, delegate-oversized.txt, delegate-test-file.txt in ~/jarvis-build root). You need the
-   plugin source first: ask Simon for `cat ~/jarvis-tools/plugins/*delegate*` and one other plugin (e.g.
-   gpu_status) to copy the exact plugin pattern (decorator, auth dependency, pre-injected names). Either you
-   write it and Jarvis installs it via create_tool, or Jarvis does it from the spec; ask Simon which.
-5. J4 replace_in_file tool (spec 10-spec-edit-tool.md); then Simon adds the one rule line to the Builder prompt.
-6. Then Jarvis continues 01-steps.md: B1 backup to the USB drive (needs from Simon:
-   `findmnt /mnt/models -o SOURCE,FSTYPE,OPTIONS; sudo docker inspect open-webui --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'`),
-   S2 watchdog, S3 job DB with the spec gate, S4 worker. Then the roadmap phases.
-Also pending: the reasoning-effort three-mode test (expected answer 62), optional purge of lxd-installer,
-storing the restic password off the box.
+Follow MASTER-PLAN.md Stage A (A1-A10), then stages B-H. Details per step:
+- A1-A3: help Simon through ctxproxy/README.md 1-6 and autopilot/README.md 1-3; read every output; fix and
+  rebuild the bundle if the real server disagrees.
+- A4: autopilot gates AP-1..AP-4 + one Open WebUI chat run + gate 3; read every `jarvis-autopilot status`,
+  check_task.py and report.py output; set CTXPROXY_RESERVE from report.py. Until all pass, the manual new-chat
+  routine (RESUME HERE) stays the official fallback.
+- A5 B1 backup: needs from Simon `cat` of ~/jarvis-build/backup/{jarvis-backup.sh,sqlite_snap.py,config.env},
+  `findmnt /mnt/models -o SOURCE,FSTYPE,OPTIONS` and
+  `sudo docker inspect open-webui --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'`.
+  Install a root-owned copy (/usr/local/sbin + /etc/jarvis-backup/, config mode 600), never the file in
+  ~/jarvis-build (S1 review finding). Plus the fstab line for the drive (ro, nofail, by UUID, ntfs3).
+- A6 J2b (spec 08, J2b section): `jarvis-autopilot next-step --allow-create-tool`. Known: the plugin has
+  `_MAX_OUTPUT_TOKENS = 8000` at line 16. Ask Simon for `cat ~/jarvis-tools/plugins/*delegate*` and one other
+  plugin first, so you can review Jarvis's diff against the exact plugin pattern.
+- A7 gate 5 / J2c; A8 J4 (spec 10) by autopilot, then the rule line in the Builder prompt; A9 regression run.
+- A10 loose ends: reasoning-effort three-mode test (expected answer 62), optional purge of lxd-installer,
+  restic password off the box, W22 writing folder.
+- Then Stage B: S2 watchdog, S3 job DB with the spec gate, S4 worker, each as `jarvis-autopilot next-step`
+  (Simon at home), then Claude reviews the foundation. Runs while Simon is away: only after R1.5 and R1.6.
 
 ## Lessons (read these)
 - Jarvis has claimed changes he did not make. Always check with `git -C ~/jarvis-build show --stat HEAD` and
   `git status --short`; ask for real output, never accept a summary.
 - Jarvis's context is 24,576 tokens including his xhigh thinking; long prompts, big tool outputs and shell
-  quoting puzzles fill it. Give him small steps, a tool-call budget per turn, and a 2-line status when out.
+  quoting puzzles fill it. The proxy and the autopilot now carry him across compactions and chats, but only
+  what he wrote into RESUME HERE and git survives: keep specs small and insist on commits after each sub-task.
 - A pasted prompt once still contained "[PASTE THE OUTPUT HERE]"; check prompts for placeholders.
 - Don't `rm -rf` a variable path in your own sandbox; the safety check blocks it. Use fresh mktemp dirs.

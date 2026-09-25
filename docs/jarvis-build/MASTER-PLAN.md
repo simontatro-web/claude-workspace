@@ -35,9 +35,9 @@ Two more rules:
 1. Claude writes the spec (tests + undo) or the code and pushes it to claude/orchestrator-research.
 2. Simon moves it to the box: GitHub "Download raw file", `scp $HOME\Downloads\<file> simon@jarvis-2:~/`,
    `sha256sum` must match Claude's value, then extract. Each bundle carries the handoff files it changes.
-3. Either Jarvis builds it in a NEW Jarvis Builder chat, opener:
-   "Read ~/jarvis-build/PROGRESS.md (RESUME HERE), then ~/jarvis-build/handoff/01-steps.md. Tell me the next
-   step and how you will test it, then wait for my OK."
+3. Either Jarvis builds it: `jarvis-autopilot next-step` (once Stage A's gates pass; nobody types "continue"),
+   or in a NEW Jarvis Builder chat (the proxy's NEW CHAT START note gives him RESUME HERE and the git facts, so
+   "Do the next step of 01-steps.md; tell me your plan first." is enough).
    Or Simon runs Claude's root steps, each with what it changes, a test and an undo.
 4. Simon pastes the proof: test output, `git -C ~/jarvis-build show --stat HEAD`,
    `git -C ~/jarvis-build status --short`, and for installs `systemctl status <unit> --no-pager | head -5`.
@@ -54,6 +54,7 @@ Start of every Claude session, Simon pastes this (read-only):
     git -C ~/jarvis-build log --oneline -5; git -C ~/jarvis-build status --short
     head -20 ~/jarvis-build/PROGRESS.md
     systemctl is-active llama-server jarvis-run-host-commands jarvis-ctxproxy
+    jarvis-autopilot status 2>/dev/null | head -4
 
 `git status` must be empty. Anything listed changed without a commit: until the fences (R1.6), Jarvis's
 shell can edit every file Simon owns, the proxy included.
@@ -63,26 +64,27 @@ shell can edit every file Simon owns, the proxy included.
 Each stage ends in a gate. The next stage starts only when its gate is MEASURED.
 
 ### Stage A: make Jarvis a builder you can rely on (now)
-Order proposed 2026-09-25; Simon to confirm. Changes from the old queue: B1 moves up (A5), the Builder
-prompt is updated before the acceptance runs (A3), J2b comes before gate 5 (A6, A7), and a regression run
-is added (A9).
+Changes from the old queue, agreed 2026-09-25 when Simon asked for automatic "continue": the Builder prompt v2
+and the autopilot are built by Claude and installed first; B1 runs alongside the acceptance runs; J2b comes
+before gate 5; J2b and J4 become the autopilot's first real jobs; a regression run closes the stage.
 
 | Step | What | Builds | Installs | Status |
 |---|---|---|---|---|
-| A1 | J3 proxy on the box: ctxproxy/README.md steps 1-4 | Claude (done) | Simon | built: bundle 4758c4fb, 51 tests pass from a clean extract on Python 3.11 and 3.12 (MEASURED, Claude's sandbox). Not on the box |
-| A2 | J3 service and Open WebUI wiring: README steps 5-6. After it, a tool-call test in Builder, not only "hi" | Claude | Simon | todo |
-| A3 | J1b Builder prompt v2: the proxy's CONTEXT HIGH / COMPACTED rules replace the filter lines; turn budget re-set. Before A4, so the runs test the prompt you will actually use | Claude | Simon (Open WebUI) | todo |
-| A4 | J3 acceptance, gates 2-4 (README 7): 3 PASS runs, each with 1+ compaction, one with 2+; in one run, restart the proxy once mid-run and it must still PASS; one closed-and-resumed run. Then set RESERVE from report.py | Jarvis runs, Simon drives | - | todo |
-| A5 | B1 backup live: restic repo on the USB drive, root-owned copy of the S1 script, nightly timer, restore drill; plus R1.4's fstab line for the drive (read-only, nofail) so the target is there after a reboot. Runs alongside A4 (your root time, not GPU time). Today nothing on the box has a second copy (SOURCE: handoff) | Claude, from the S1 files | Simon | S1 built, tested locally (SOURCE); B1 todo |
-| A6 | J2b delegate fix-up (spec 08). Recommended: Jarvis builds it (small, fully specced, real use of the proxy); Claude reviews the diff | Jarvis | create_tool | todo |
+| A1 | Files on the box: ctxproxy/README.md steps 1-4 (bundle, packages, 194 tests, 8 real-server checks) | Claude (done) | Simon | built: proxy v2.1 (new-chat note, git facts) + autopilot + Builder prompt v2; tests pass off-box (see log). Not on the box |
+| A2 | Proxy service, Open WebUI wiring, Builder prompt v2 pasted: README steps 5-6, with the new-chat tool-call test | Claude | Simon | todo |
+| A3 | Autopilot: `jarvis-autopilot` command (root-owned), tool key in ~/.config/jarvis-autopilot.env, optional ntfy, `jarvis-autopilot check` 8/8 (autopilot/README.md 1-3) | Claude | Simon | todo |
+| A4 | Acceptance: AP-1 three autopilot runs PASS with compactions (one with 2+), nobody typing; AP-2 pause + new run picks up; AP-3 proxy restart mid-run; AP-4 seatbelt live; one Open WebUI chat run; gate 3 (new chat, "Continue." only). Then set RESERVE from report.py | Jarvis runs, Simon starts | - | todo |
+| A5 | B1 backup live: restic repo on the USB drive, root-owned copy of the S1 script, nightly timer, restore drill; plus R1.4's fstab line for the drive (read-only, nofail). Alongside A4 (your root time, not GPU time). Today nothing on the box has a second copy (SOURCE: handoff) | Claude, from the S1 files | Simon | S1 built, tested locally (SOURCE); B1 todo |
+| A6 | J2b delegate fix-up (spec 08): the first real autopilot job, `jarvis-autopilot next-step --allow-create-tool`; Claude reviews the diff | Jarvis (autopilot) | create_tool | todo |
 | A7 | J2c = gate 5 (P4b): delegate at xhigh in a chat past ~15k tokens; does the next turn re-read everything? Needs A6: today's 8000 cap makes xhigh delegate calls return nothing (SOURCE: handoff) | - | Simon drives | todo |
-| A8 | J4 replace_in_file tool (spec 10), then its rule line in the Builder prompt | Jarvis | create_tool; Simon adds the line | todo |
-| A9 | Regression: one more acceptance run with the final prompt and tools; must PASS | Jarvis | - | todo |
+| A8 | J4 replace_in_file tool (spec 10) by autopilot, then its rule line in the Builder prompt | Jarvis (autopilot) | create_tool; Simon adds the line | todo |
+| A9 | Regression: one more `jarvis-autopilot acceptance` with the final prompt and tools; must PASS | Jarvis | - | todo |
 | A10 | Loose ends: reasoning-effort three-mode test (expect 62); purge lxd-installer (optional); restic password stored off the box; start the W22 writing folder | Simon | - | todo |
 
 Gate A: A4, A7 and A9 PASS; a B1 restore matches; one planned reboot (your timing) brings llama-server,
-Open WebUI, the tool server, the proxy and the drive mount back by themselves. Then the proxy replaces the
-manual new-chat routine, and Jarvis works through the stages below.
+Open WebUI, the tool server, the proxy and the drive mount back by themselves. Then the autopilot replaces the
+manual new-chat routine: Stage B steps run as `jarvis-autopilot next-step`, one approved step per run, with you
+at home. Runs while you are away wait for R1.5 (kill switch) and R1.6 (separate users).
 
 ### Stage B: the foundation Jarvis builds (01-steps.md)
 
@@ -99,7 +101,7 @@ to your phone.
 
 | Step | What |
 |---|---|
-| R1.2 | Tool server bound to 172.17.0.1 (today it listens on every interface: MEASURED, Part 5), then a host firewall (D2). Small: can be done any evening, even during Stage A |
+| R1.2 | Tool server bound to 172.17.0.1 (today it listens on every interface: MEASURED, Part 5), then a host firewall (D2). Small: can be done any evening, even during Stage A. Afterwards set AUTOPILOT_TOOLS_URL=http://172.17.0.1:8200 in ~/.config/jarvis-autopilot.env |
 | R1.5 | Kill switch v1: jarvis-autonomy.target + pause flag |
 | R1.6 | Fences: users jarvis / jarvis-core / jarvis-eval; tool server as jarvis on 8201 (D1) |
 | R1.7 | Safety sections 13/14/19 back in the system prompt (D16) + regression suite v0 (~15 trap cases) |
@@ -107,7 +109,8 @@ to your phone.
 | R1.1b | Off-site copy of the backup (B2 or the NAS; D3 says USB first, off-site later) |
 
 Already done (MEASURED 2026-09-25): the 17-package driver hold (D4) and simon out of the lxd group (D22).
-Gate C = the roadmap's Phase 1 exit test.
+Gate C = the roadmap's Phase 1 exit test. After it, autopilot runs may happen while you are away (the autopilot
+runs as the jarvis user, and the kill switch stops it).
 
 ### Stage D: the job spine, where "interview me every time" becomes enforced (roadmap Phase 2)
 R2.1 jarvis.db + job API as jarvis-core (installs S3) · R2.2 approvals from your phone · R2.3 spec gate
@@ -140,7 +143,7 @@ Parked by you (Sep 14): W17, W18.
 | Want | Lands in |
 |---|---|
 | N1 interview every time, never queue an unspecced job | R2.3 + R2.4: enforced by the database, not by a prompt |
-| N2 builds and improves itself | Stages A-B now (Jarvis builds from specs); self-change jobs after R2.3 + R1.8 |
+| N2 builds and improves itself | Stages A-B now (Jarvis builds from specs through the autopilot); self-change jobs after R2.3 + R1.8 |
 | N3 fresh-context big-model jobs | R3.3 (the delegate tool is the small version today) |
 | N4 any model on demand, including from the drive | R3.1 |
 | N5 always-on self-improvement | R1.8, then Stage G |
@@ -187,6 +190,13 @@ New wants: Claude adds a row here and places it in a stage before anyone builds 
 Done: D3 (USB first), D4, D22 (MEASURED 2026-09-25). Standing: D18, benchmarks keep the 1-7 AM window.
 
 ## 6. Status log (newest first; one line per change, with its proof)
+- 2026-09-25: built for automatic continuation: proxy v2.1 (NEW CHAT START note with RESUME HERE and git
+  facts, git facts in the compaction note, smoke test 8 checks with a start timeout), the autopilot (auto
+  "continue", STATUS DONE/BLOCKED with git + verify checks, fresh chat for the same run when a chat gets too
+  long, limits, PAUSE, seatbelt, transcript, ntfy,
+  --check/--status, jarvis-autopilot command), Builder prompt v2, 00/01/09 updates. 194 passed (63 proxy +
+  131 autopilot) from a clean extract of jarvis-build-bundle.tgz on Python 3.11 and 3.12 (MEASURED, Claude's
+  sandbox; checksum in CLAUDE-HANDOFF.md). Not on the box yet.
 - 2026-09-25: plan written. J3 bundle sha256 4758c4fbc17ec6e6636b3ddda62103f6af9b6e65512272c49208831065fd1628;
   51 passed from a clean extract on Python 3.11.15 and 3.12.3 (MEASURED, Claude's sandbox). Nothing from
   Stage A is on the box yet.

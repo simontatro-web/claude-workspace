@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A-real checks: the proxy against the REAL llama-server (read-only for the box).
 
-Starts its own proxy on 127.0.0.1:8113 (temp state dir), runs 5 checks, stops it.
+Starts its own proxy on 127.0.0.1:8113 (temp state dir), runs 8 checks, stops it.
 Uses enable_thinking=false and max_tokens 4, so each request is short; the long
 part is llama-server reading ~17k-token prompts (about 1-2 minutes in total).
 
@@ -50,12 +50,18 @@ def main():
     prog = os.path.join(tmp, "PROGRESS.md")
     with open(prog, "w") as f:
         f.write("# PROGRESS\n\n## RESUME HERE\n- Smoke test. Exact next action: none.\n")
-    cfg = px.Config(host="127.0.0.1", port=PORT, upstream=UP, state_dir=tmp, progress_path=prog)
+    cfg = px.Config(host="127.0.0.1", port=PORT, upstream=UP, state_dir=tmp, progress_path=prog,
+                    resume_new_chats=True)
     app = px.build_app(cfg)
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error"))
     th = threading.Thread(target=srv.run, daemon=True)
     th.start()
+    t_start = time.time()
     while not srv.started:
+        if not th.is_alive() or time.time() - t_start > 20:
+            print(f"FAIL  the test proxy could not start on 127.0.0.1:{PORT} (port already in use?). "
+                  f"Check: ss -ltnp | grep :{PORT}")
+            sys.exit(2)
         time.sleep(0.05)
     print(f"proxy on {BASE} -> {UP}; warn {cfg.warn_at}, compact {cfg.compact_at}; state in {tmp}")
     c = httpx.Client(timeout=600)
@@ -67,15 +73,16 @@ def main():
         opts = {"model": model, "max_tokens": 4, "temperature": 0,
                 "chat_template_kwargs": {"enable_thinking": False}}
 
-        def send(msgs, stream=False):
+        def send(msgs, stream=False, resume=False):
             body = dict(opts, messages=msgs, stream=stream)
+            hdrs = {} if resume else {"X-Ctxproxy-No-Resume": "1"}  # checks 1-5 measure the proxy without it
             if stream:
                 lines = []
-                with c.stream("POST", BASE + "/v1/chat/completions", json=body) as r:
+                with c.stream("POST", BASE + "/v1/chat/completions", json=body, headers=hdrs) as r:
                     for line in r.iter_lines():
                         lines.append(line)
                 return r.status_code, lines
-            r = c.post(BASE + "/v1/chat/completions", json=body)
+            r = c.post(BASE + "/v1/chat/completions", json=body, headers=hdrs)
             return r.status_code, r.json()
 
         def last_event():
@@ -141,6 +148,22 @@ def main():
         ok = all(a == "sticky" for a, _, _ in evals) and all(
             p is not None and first_total and p < 0.25 * first_total for _, p, _ in evals)
         check("M1 sticky prefix: next 4 requests reuse the cache (<25% re-read)", ok)
+
+        # 6. new-chat note (RESUME HERE + git facts from ~/jarvis-build): accepted, then reused
+        chat = [sysmsg, {"role": "user", "content": "Smoke test: say OK."}]
+        st, _ = send(chat, resume=True)
+        e1 = last_event()
+        chat += [{"role": "assistant", "content": "OK."}, {"role": "user", "content": "Say OK again."}]
+        st2, _ = send(chat, resume=True)
+        e2 = last_event()
+        total2 = (e2.get("up_prompt_n") or 0) + (e2.get("up_cache_n") or 0)
+        print(f"      new chat: note {e1.get('resume_tokens')} tokens, {e1.get('tok_before')} -> "
+              f"{e1.get('tok_after')}; next request re-read {e2.get('up_prompt_n')} of {total2}")
+        check("R1 new-chat note accepted by llama-server", st == 200 and e1.get("resume") == "new",
+              f"action {e1.get('action')}")
+        check("R2 next request of that chat keeps the note and reuses the cache",
+              st2 == 200 and e2.get("resume") == "sticky" and total2 > 0
+              and (e2.get("up_prompt_n") or 0) < 0.5 * total2)
     finally:
         srv.should_exit = True
         th.join(timeout=10)
