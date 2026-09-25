@@ -42,7 +42,7 @@ Companion files:
 - 69 t/s cited in agent-harnesses
 - 29-52 t/s decode and ~630-650 t/s prefill on Sep 22, before p-min 0.4 and xhigh
 
-Part 4 says re-measure before relying on any of them. **So the current production decode speed and time-to-first-token are VERIFY.**
+Part 4 says re-measure before relying on any of them. **Now measured: see section 1a (decode ~45-58 t/s typical, prompt reading ~500-680 t/s).**
 
 **Tool server** (port 8200, run as `simon`)
 - Unrestricted `run_host_command`, plus write_file, read_file, save_finding, web_search, hf_model_sizes, create_tool (self-restart), list_tools.
@@ -82,6 +82,100 @@ What this means for every want below:
 - The RAM rule is "Jarvis + ONE big model at a time" (HANDOFF).
 
 ---
+
+## 1a. Verified on the box, 2026-09-25 10:57 AM Central (Simon ran `docs/orchestrator-verify.sh`)
+
+Everything in this section is MEASURED from that run's output unless labelled otherwise. **Where it disagrees with the rest of this document, this section wins.**
+
+### Speed of the production 27B, now measured
+11 real requests on slot 1, 10:52-10:54 AM Central, today's config:
+| | Range | Typical |
+|---|---|---|
+| Prompt reading | 343-722 t/s | ~500-680 t/s |
+| Generation (decode, with MTP) | 42-79 t/s | ~45-58 t/s |
+| MTP draft acceptance | 0.67-0.98 | mean draft length 3.9-5.9 |
+
+**Why it matters:** those requests had 611-3,886 new prompt tokens each. At ~500 t/s, a 1,500-token prompt costs **~3 s before the first token, before any reasoning**. For the front desk and voice (N8, N10), prompt size and cache reuse matter as much as model speed. A ~300-token voice prompt should take ~0.6 s (ESTIMATE from these rates).
+
+### Reasoning can be turned off per request
+The chat template (V10) reads `enable_thinking` and `reasoning_effort`:
+- Reasoning is applied only if `enable_thinking` is undefined or true.
+- The allowed efforts are xhigh (the default), medium and low.
+
+So the voice and front-desk presets can send `chat_template_kwargs: {"enable_thinking": false}` (or `"reasoning_effort": "low"`) per request with no server change. Whether a per-request value overrides the server's `--chat-template-kwargs` default is **VERIFY**: V23 below is a one-request test.
+
+### Exposure and permissions: worse than assumed in two places
+- **Firewall:**
+  - ufw is inactive and the INPUT policy is accept.
+  - **8080 (llama-server, no API key), 3000 (Open WebUI), 8200 (the unrestricted shell) and 111 (rpcbind) all listen on every interface.**
+  - Tailscale serve has no config.
+- **Group memberships:**
+  - `simon` is in `sudo` (password required; no NOPASSWD entries). The Sep 14 note that `sudo -n nvme smart-log` works was from the old box and **no longer holds**.
+  - `simon` is **not** in `docker`.
+  - **`simon` IS in `lxd`.** If LXD is installed, membership in `lxd` is effectively root without a password: a member can start a privileged container with the host's `/` mounted. Jarvis runs as `simon`, so its "unrestricted shell" may have a password-free path to root. **VERIFY V24** (is LXD installed and its socket present). If it is, removing `simon` from `lxd`, or at least keeping the future `jarvis` user out of it, belongs in roadmap step 1.6.
+- **Production 27B:** runs as `User=simon` with `OOMScoreAdjust=0` and `MemoryMax=infinity`.
+  - Any process running as `simon`, including Jarvis's shell, can kill it by PID with no sudo. That is exactly how the pkill incidents worked.
+  - A big-model load that exhausts RAM is as likely to OOM-kill Jarvis as the experiment. The benchmark units protect themselves with `OOMScoreAdjust=1000`, so the risk is lower for them, but anything launched without that pattern is not protected.
+- **Tool server:** `User=simon`, `--host 0.0.0.0`, key in an EnvironmentFile (mode 600). As expected.
+
+### Disk, memory, links
+- **NVMe:** 915G, **807G used (93%), 62G free**. `/mnt/models`: 2.7T used, 1.1T free.
+- **RAM:** 492 GiB available at the time of the check. There is a 7 GiB swap file. Benchmark units disable swap for themselves; production does not.
+- **NVMe link:** 8 GT/s x4 (the drive is capable of 16 GT/s, and the PCIe 3.0 board downgrades it), so **~3.9 GB/s max**. The "~2-3 min to load GLM-5.3 from NVMe" estimate stands, plus repack time.
+- **Model drive:** on USB 3.0 (5000M) with the UAS driver. Its HDD speed, not USB, is the limit (the ~35-60 min estimates for big loads stand; ESTIMATE).
+- **GLM-5.3 load time:** no glm-test journal lines (V20). Still unmeasured.
+
+### Update exposure
+- `apt-mark showhold` is **empty**: the NVIDIA driver is not held.
+- The running kernel is 6.8.0-142, and the NVIDIA 580.178.04 DKMS module is built for both 6.8.0-139 and -142. So **a kernel update has already happened and DKMS rebuilt the driver correctly**. That lowers the risk of kernel updates; it does not remove the risk of a driver-package update.
+- unattended-upgrades allows the security pockets and has an **empty Package-Blacklist**. Whether the 580 driver packages come from a pocket unattended-upgrades would touch is VERIFY (V25).
+
+### Tailscale naming
+- This box is **`jarvis-2` (100.101.72.69)** on the tailnet.
+- `jarvis-1` (100.87.7.19, offline 4 days) and `jarvis` (offline 14 days) are old entries. The wiki's `jarvis-1.tail7b6a92.ts.net` URLs are stale.
+- Your iPhone 14 is on the tailnet, which confirms phone approvals over Tailscale are possible.
+
+### Components that DO exist on the model drive (downloads avoided)
+| Directory | Contents |
+|---|---|
+| `verify/` | HHEM-2.1-open, prompt-injection-deberta, Qwen3Guard-Gen-4B, Qwen3-VL-4B, phi3.5 hallucination judge, docling-models |
+| `audio/` | Kokoro-82M-ONNX, Kokoro-82M GGUF (q8_0, audio.cpp), faster-whisper large-v3 and large-v3-turbo, whisper.cpp |
+| `embed/` | Qwen3-Embedding-4B, Qwen3-Reranker-4B, Qwen3-VL-Reranker-2B, jina-code |
+| `slots/` | router-Qwen3-1.7B, router-alt-2B-distill, asr, embedding, ocr, reranker |
+| `data/research/` | RAGTruth, SimpleQA, SimpleQA-verified |
+
+The groundedness gate, the injection filter, text-to-speech, speech-to-text, the router and the calibration sets are all already on the drive.
+
+### Offline corpora present
+Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 Stack Exchange sites, LibreTexts (bio, chem, math, phys, med, k12), mdwiki, WikEm, Wikibooks, Wikiversity, Wikispecies, Gutenberg, iFixit, CrashCourse, the World Factbook.
+
+**Not seen: PMC and PubMed.** They are not in the corpus listing (maybe under `corpus/refs/` or never downloaded; VERIFY V26). So the research spec's "local PMC/PubMed first" plan is not available yet. Wikipedia, the Stack Exchange sites and LibreTexts are.
+
+**Integrity flags**
+- `gardenology.org_en_all_2026-09.zim` is exactly 33,554,432 bytes (32 MiB, a power of two): almost certainly a **truncated download**.
+- `gardenology`, `zimgit-medicine` and `wikipedia_en_all_maxi` all have the same 22:32 timestamp, when the chain stopped. **Check the Wikipedia maxi file's size against the published size before trusting it** (V26).
+
+### Things that are gone
+- **No browser stack** (V16): the headed Chrome / Xvfb / CDP bridge from Sep 14 did not survive the rebuild. Website review (N13) and research page-reading (N6) need a browser again: Playwright's Chromium, headless, under the `jarvis` user.
+- **No `/metrics`** on llama-server (501; needs `--metrics`). `/slots` works (200), so the control room can read slot state today.
+
+### Open WebUI
+- Image `ghcr.io/open-webui/open-webui:main`, created 2026-09-21.
+- `main` is a moving tag, so a future `docker pull` can silently change versions. Pin a release tag at the next deliberate recreate (with `~/recreate-webui.sh` or its successor).
+
+### Backup tooling
+- restic 0.16.4 is installed.
+- `~/.config/jarvis/restic-pass` exists (mode 600). **Keep a copy of that password off the box**, or the backup cannot be restored after a dead NVMe.
+- No repository location is known yet (D3).
+
+### Follow-up checks (all read-only, or a single harmless model request)
+| # | Settles | Command |
+|---|---|---|
+| V23 | Per-request thinking-off works against the server default | `curl -s -m 60 http://127.0.0.1:8080/v1/chat/completions -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"Say OK."}],"max_tokens":40,"chat_template_kwargs":{"enable_thinking":false}}' \| python3 -c "import json,sys; m=json.load(sys.stdin)['choices'][0]['message']; print('reasoning chars:', len(m.get('reasoning_content') or '')); print('content:', m.get('content'))"` |
+| V24 | Is `lxd` membership a live root path | `snap list 2>/dev/null \| grep -i lxd; ls -l /var/snap/lxd/common/lxd/unix.socket 2>&1; command -v lxc` |
+| V25 | Where the NVIDIA driver packages come from | `dpkg -l \| grep -E '^ii +(nvidia-driver\|nvidia-dkms\|libnvidia-compute)' \| head; apt-cache policy nvidia-driver-580 2>/dev/null \| head -12` |
+| V26 | PMC/PubMed presence; ZIM integrity; model folders complete | `ls -la /mnt/models/models/corpus/refs /mnt/models/models/corpus/ted /mnt/models/models/data/research 2>&1 \| head -60; ls -la /mnt/models/models/verify/HHEM-2.1-open /mnt/models/models/verify/prompt-injection-deberta 2>&1 \| head -40` |
+
 
 ## 2. The spine: one structure that makes the wants enforceable
 
@@ -764,17 +858,17 @@ Most are covered by an N-section above. The rest keep the plans already in the w
 
 | Role | Model | Where it runs | Speed evidence | Status |
 |---|---|---|---|---|
-| Front desk, interviewer, voice, orchestrator | Qwen3.8-27B Q4_K_M + MTP | 2x V100 (production 8080) | Older runs: 28-83 t/s decode depending on config; ~630-650 t/s prefill on Sep 22 (MEASURED then). **Current config: VERIFY.** Time-to-first-token: not measured. | Resident |
+| Front desk, interviewer, voice, orchestrator | Qwen3.8-27B Q4_K_M + MTP | 2x V100 (production 8080) | **Today: decode 42-79 t/s (typical 45-58), prompt reading 343-722 t/s, MTP acceptance 0.67-0.98 (MEASURED Sep 25, section 1a).** Time-to-first-token ≈ prompt tokens ÷ ~500 t/s + reasoning. | Resident |
 | Router / classifier / triage | Qwen3-1.7B Q4_K_M (A/B: Qwen3.8-2B distill), grammar-forced labels + log-probability confidence, no tools | CPU | Not measured. "Well under a second" per label (ESTIMATE, jarvis-orchestrator). | On drive (slots/) |
 | Worker for long-context building and reading | Qwen3.8-Flash-Next UD-Q4_K_XL (+MTP via the PR build) | CPU, socket 1 beside Jarvis | ~5-6 t/s beside Jarvis, ~10 interleaved (ESTIMATE). **Prefill unmeasured**, which is the deciding number. | On NVMe, not hashed |
 | Hard single-shot pieces, final review, nightly synthesis | GLM-5.3 UD-Q4_K_XL | CPU, both sockets; exclusive | **1.48 t/s decode interleaved (Jarvis off), 0.9-1.1 beside; prefill ~10 → ~2.5 t/s from empty to 16K (MEASURED)** | On NVMe, verified |
 | In-loop reviewer (other family), mid rung | GLM-5.3-Flash UD-Q4_K_XL | CPU, one socket | Not measured; needs the Unsloth fork build | On NVMe, not hashed |
 | Rare "ask one hard question" event | MiMo-V2.6-Pro MXFP4 | Whole box, Jarvis off | ~2-5 t/s (ESTIMATE, SOURCE wiki); nothing measured | Raw parts on drive; needs join + ~519 GiB free disk |
-| Groundedness gate | HHEM-2.1-Open (or MiniCheck) | CPU | Milliseconds per pair (SOURCE: wiki); not measured here | HHEM queued in pull_orch; VERIFY on drive |
+| Groundedness gate | HHEM-2.1-Open (or MiniCheck) | CPU | Milliseconds per pair (SOURCE: wiki); not measured here | On drive (verify/HHEM-2.1-open) |
 | Retrieval | Embeddings + reranker (0.6B wide, 4B final) | CPU | Not measured | On drive (embed/, verify/) |
-| Safety filters | Prompt-injection classifier; Qwen3Guard-Gen-4B for public presets | CPU | Not measured | Qwen3Guard on drive; classifier VERIFY |
+| Safety filters | Prompt-injection classifier; Qwen3Guard-Gen-4B for public presets | CPU | Not measured | Both on drive (verify/) |
 | Website visual check | Qwen3-VL-4B | CPU | Not measured | On drive (verify/) |
-| Speech-to-text / text-to-speech | Moonshine or Parakeet (or Whisper), Kokoro-82M | CPU now; GPU after the re-layout | Not measured; CPU text-to-speech likely ~1-2 s per short sentence (SOURCE snippets) | Qwen3-ASR on drive; Kokoro VERIFY |
+| Speech-to-text / text-to-speech | Moonshine or Parakeet (or Whisper), Kokoro-82M | CPU now; GPU after the re-layout | Not measured; CPU text-to-speech likely ~1-2 s per short sentence (SOURCE snippets) | On drive: faster-whisper large-v3/turbo, whisper.cpp, ASR slot, Kokoro ONNX + GGUF |
 | Red-team advisor | HauhauCS 27B Uncensored | GPU window or the freed card | Not measured; FastMTP patch required | On drive |
 
 **What would change this table:** the Flash-Next day-1 queue (already written: docs/bench/queue-fn.txt) and the llama-server harness (KV per token, MTP, `--parallel`, time-to-first-token). **The benchmark session owns those; this plan depends on their results.**
@@ -848,9 +942,11 @@ These assume Jarvis writes most of the code from Claude-written specs, with you 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
 | D1 | The permission fence | (a) keep Jarvis's shell as `simon` (today); (b) move it to a new `jarvis` user with full control of its own home and memory, no sudo | (b). It is what makes "never break", the spec gate and the unwritable scorer real. Also decide what of `/home/simon` `jarvis` may **read** (e.g. `~/bench/results`, `~/models` read-only). |
-| D2 | Network exposure | Tool server `0.0.0.0` → `172.17.0.1`; llama-server 8080 and Open WebUI 3000 LAN-wide vs local + Tailscale only | Bind the tool server now. Check V2 before deciding on 8080/3000. |
+| D2 | Network exposure (V2/V14: no firewall, 8080/3000/8200/111 on every interface) | Tool server → `172.17.0.1`; 8080 → loopback + docker0; 3000 → loopback + Tailscale; a host firewall (careful: Docker manages its own nft rules) | Bind the tool server now. Then a firewall that allows SSH and Tailscale and drops the LAN on 8080/8200/111. |
 | D3 | Off-box backup target | Backblaze B2 now (restic, encrypted); NAS (ESC4000) later; both | Both: B2 now (pennies for configs, databases, memory, units); NAS as the second copy once it has caddies. Keep the restic password somewhere off the box. |
-| D4 | Freeze the GPU stack | `apt-mark hold` the NVIDIA driver (and kernel, unless DKMS rebuilds are proven) | Hold. Driver 580 is the last branch for Volta. |
+| D4 | Freeze the GPU stack | `apt-mark hold` the NVIDIA driver packages; add them to unattended-upgrades' Package-Blacklist | Hold the driver. Kernel updates can stay: DKMS already rebuilt 580 for 6.8.0-142 (MEASURED). |
+| D22 | `lxd` group membership (section 1a) | Remove `simon` from `lxd` if LXD is installed (V24); never put `jarvis` in it | Remove, if V24 shows LXD installed. |
+| D23 | Production OOM protection | Give llama-server a strongly negative `OOMScoreAdjust` (and later run it as its own user) | Yes, with the next deliberate production-unit edit (backup + spare-port rule). |
 | D5 | HF token on the model drive | Revoke and re-issue, or keep | Revoke (it is plain text and readable by any user). |
 | D6 | Notifications | ntfy.sh public topic (as Sep 14) vs self-hosted ntfy + upstream for iOS | Self-hosted, auth deny-all; approvals via one-time tokens. |
 | D7 | Frontier top rung | None / Claude API or similar with a hard monthly cap | A cap of ~$10-15/month inside your $25, used only for audits of syntheses and truly stuck jobs. |
@@ -904,12 +1000,13 @@ Check V6-V8 first. Several of these may already be on the drive from pull_orch /
 | ntfy server binary | ~30-40 MB | Section 2.6 | ESTIMATE |
 | Pipecat (pip) + faster-whisper/ctranslate2 + onnxruntime | ~0.5-2 GB with deps | N10 | ESTIMATE |
 | Moonshine (base) and/or Parakeet TDT 0.6B v3 | ~0.25 GB / ~0.6-2.5 GB | N10 speech-to-text | ESTIMATE |
-| Kokoro-82M + voices (if not on drive) | ~0.35 GB | N10 text-to-speech | ESTIMATE |
+| ~~Kokoro-82M~~ | already on the drive (ONNX and GGUF; section 1a) | N10 | MEASURED |
 | Speaches container image (optional alternative to Pipecat's local services) | ~2-5 GB | N10 | ESTIMATE |
-| HHEM-2.1-Open (if not on drive) | 438,535,352 B | N15 gate | SOURCE (wiki) |
+| ~~HHEM-2.1-Open~~ | already on the drive | N15 | MEASURED |
 | MiniCheck-FT5 (optional second checker) | ~3 GB (770M params, fp32) | N15 | ESTIMATE |
-| protectai deberta-v3-base-prompt-injection-v2 (if not on drive) | ~0.74 GB | N11/N6 input filter | SOURCE (wiki) |
-| RAGTruth, SimpleQA-verified, FRAMES (if not on drive) | small (<1 GB total) | Calibrating the gate and research accuracy | ESTIMATE |
+| ~~prompt-injection deberta~~ | already on the drive | N11/N6 | MEASURED |
+| Playwright + its Chromium build (the Sep 14 browser stack is gone) | ~0.3-0.5 GB | N6 page reading, N13 website review | ESTIMATE |
+| FRAMES (RAGTruth and SimpleQA are already on the drive) | small | Calibrating the gate and research accuracy | ESTIMATE |
 | promptfoo (npm), lm-evaluation-harness (pip), GEPA (pip) | ~0.3-1 GB total | Scorer (N5) | ESTIMATE |
 | Arize Phoenix image (optional, later) | ~1-2 GB | N12 trace drill-down | ESTIMATE |
 | Python wheels for the job spine (fastapi, uvicorn, httpx are already in use; add pydantic, sse-starlette) | small | Spine | ESTIMATE |

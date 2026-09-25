@@ -58,7 +58,7 @@ Labels as in the research doc. Effort per step: ESTIMATE.
   - Jarvis runs `whoami` in a fresh chat.
 - **Undo:** restore the unit backup.
 - **Effort:** S.
-- Decide 8080/3000 exposure after V2.
+- Next (D2): a host firewall. V14 shows ufw inactive and INPUT policy accept. Allow SSH + Tailscale; drop LAN access to 8080, 8200 and 111. Test from a LAN device before and after. Docker publishes 3000 through its own nft chains, so restrict 3000 by binding the published port rather than with ufw.
 
 ### 1.3 Health watchdog and notifications (GAP 1, section 2.6). No downtime.
 - **Build**
@@ -79,7 +79,7 @@ Labels as in the research doc. Effort per step: ESTIMATE.
 
 ### 1.4 Freeze and reboot-proof (D4, D17). No downtime.
 - **Build**
-  - Hold the NVIDIA driver (and the kernel unless DKMS is proven, V12).
+  - Hold the NVIDIA driver packages and blacklist them in unattended-upgrades. The kernel can keep updating: DKMS rebuilt the driver for 6.8.0-142 (MEASURED V12).
   - Keep unattended security updates for everything else.
   - An fstab entry for the model drive: read-only, `nofail`, by UUID, ntfs3.
 - **Test:** `apt-mark showhold` lists the held packages. After the next planned reboot: the drive is mounted read-only and llama-server comes up (the Sep 23 boot bug was fixed; re-confirm).
@@ -103,7 +103,8 @@ Labels as in the research doc. Effort per step: ESTIMATE.
   3. Move Jarvis's memory to `/home/jarvis` under git. Jarvis keeps full control of it (your Sep 22 choice).
   4. Grant read-only access to what you allow (e.g. `~/bench/results`).
   5. A polkit rule: `jarvis` may manage only `jarvis-sandbox-*` units.
-  6. No sudo for `jarvis`.
+  6. No sudo for `jarvis`, and not in `lxd`. Remove `simon` from `lxd` too if LXD is installed (V24, D22): the group is a password-free root path.
+  7. Later, with a production edit: run llama-server as its own user, so no agent account can kill it by PID (today it runs as `simon`).
 - **Test (as `jarvis`, through the 8201 instance)**
   - Must fail: writing `/etc`, stopping `llama-server`, reading `~/.config/jarvis`, writing `/home/simon`, deleting backups.
   - Must work: its own memory, `jarvis-sandbox-test.service`.
