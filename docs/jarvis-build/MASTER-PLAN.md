@@ -71,8 +71,8 @@ before gate 5; J2b and J4 become the autopilot's first real jobs; a regression r
 | Step | What | Builds | Installs | Status |
 |---|---|---|---|---|
 | A1 | Files on the box: ctxproxy/README.md steps 1-4 (bundle, packages, 194 tests, 8 real-server checks) | Claude (done) | Simon | DONE 2026-09-25 (MEASURED on the box): bundle 80ee0c6f, 194 passed in 62.89s, committed (23 files), smoke 8/8 |
-| A2 | Proxy service, Open WebUI wiring, Builder prompt v2 pasted: README steps 5-6, with the new-chat tool-call test | Claude | Simon | todo |
-| A3 | Autopilot: `jarvis-autopilot` command (root-owned), tool key in ~/.config/jarvis-autopilot.env, optional ntfy, `jarvis-autopilot check` 8/8 (autopilot/README.md 1-3) | Claude | Simon | todo |
+| A2 | Proxy service, Open WebUI wiring, Builder prompt v2 pasted: README steps 5-6, with the new-chat tool-call test | Claude | Simon | DONE 2026-09-25 (MEASURED): service active, health OK from host + container, new-chat note live, Builder builtin_tools off (fixed cost 9.8k -> ~4.6k), Max Tokens 8192, prompt v2 identical to handoff/07 |
+| A3 | Autopilot: `jarvis-autopilot` command (root-owned), tool key in ~/.config/jarvis-autopilot.env, optional ntfy, `jarvis-autopilot check` 8/8 (autopilot/README.md 1-3) | Claude | Simon | DONE 2026-09-25 (MEASURED): check 8/8, streamed tool call OK, 12 tools, key from the tool server's own env file; ntfy not set |
 | A4 | Acceptance: AP-1 three autopilot runs PASS with compactions (one with 2+), nobody typing; AP-2 pause + new run picks up; AP-3 proxy restart mid-run; AP-4 seatbelt live; one Open WebUI chat run; gate 3 (new chat, "Continue." only). Then set RESERVE from report.py | Jarvis runs, Simon starts | - | todo |
 | A5 | B1 backup live: restic repo on the USB drive, root-owned copy of the S1 script, nightly timer, restore drill; plus R1.4's fstab line for the drive (read-only, nofail). Alongside A4 (your root time, not GPU time). Today nothing on the box has a second copy (SOURCE: handoff) | Claude, from the S1 files | Simon | S1 built, tested locally (SOURCE); B1 todo |
 | A6 | J2b delegate fix-up (spec 08): the first real autopilot job, `jarvis-autopilot next-step --allow-create-tool`; Claude reviews the diff | Jarvis (autopilot) | create_tool | todo |
@@ -190,6 +190,9 @@ New wants: Claude adds a row here and places it in a stage before anyone builds 
 Done: D3 (USB first), D4, D22 (MEASURED 2026-09-25). Standing: D18, benchmarks keep the 1-7 AM window.
 
 ## 6. Status log (newest first; one line per change, with its proof)
+- 2026-09-25 (MEASURED): A2 and A3 done; `jarvis-autopilot check` 8/8. Note for after the acceptance runs: TASK.md
+  makes Jarvis rewrite RESUME HERE ("Acceptance task ... next: edit NN+1"); reset it to "next: J2b" and commit
+  before the first `next-step` run, and clear the 4 untracked leftovers.
 - 2026-09-25: fix: ctxproxy/.gitignore lacked resumes.json (the new-chat state file), which would block every
   autopilot DONE in ~/jarvis-build (clean tree required, seatbelt forbids ctxproxy/ writes). New test proves every
   state file is ignored. Bundle 0402e270, 195 passed from a clean extract (MEASURED, Claude's sandbox). The
