@@ -20,10 +20,20 @@ Companion to briefing-2026-09-25.md and part4. Written by Claude from Simon's ru
 - Context overflow: 1 "truncated = 1" event since the last boot — one chat hit the 24,576 window and silently lost history.
 - Your plugins: gpu_status, memory_search, sys_summary.
 
-## Hardware identity — conflict to settle
-- Your own finding (Sep 22) says jarvis-1 is a HYVE G2GPU12 GPU server on an ASUS Z10PG-D16 board, and that Simon's ASUS ESC4000 G3 is a SEPARATE machine being set up as a NAS (8 hot-swap 3.5" bays, arrived without caddies; correct caddy part ASUS 13GS1I0AM063-1). Claude's notes call jarvis-1 an "ESC4000 G3" throughout. The board and CPUs are the same either way, but chassis-specific facts in Claude's notes (PSU derating, the proprietary GPU power harness, "max 4 GPUs", ASUS's ESC4000 CPU support list and BIOS versions) may NOT apply to jarvis-1. VERIFY with: sudo dmidecode -s system-product-name; sudo dmidecode -s baseboard-product-name; sudo dmidecode -s bios-version.
-- Storage on jarvis-1: Samsung 990 PRO 1 TB NVMe (OS) plus a SATA optical drive; about 9 onboard SATA ports are free.
+## Hardware identity - SETTLED (dmidecode, 2026-09-25)
+- jarvis-1 is a HYVE G2GPU12 (system-product-name G2GPU12), board ASUS Z10PG-D16 Series, BIOS 3803. Your Sep 22 finding was RIGHT.
+- The ASUS ESC4000 G3 is a SEPARATE machine that Simon is setting up as a NAS (8 hot-swap 3.5" bays, arrived without caddies; correct caddy part ASUS 13GS1I0AM063-1).
+- Claude's notes call jarvis-1 an "ESC4000 G3" throughout. That is WRONG for the chassis. Board and CPU facts still hold. Chassis facts in those notes (PSU derating, the proprietary GPU power harness, "max 4 GPUs", ASUS's ESC4000 CPU support list and BIOS versions) do NOT apply to jarvis-1 until checked against the G2GPU12.
+- Storage on jarvis-1: Samsung 990 PRO 1 TB NVMe (OS, about 814 GB free) plus a SATA optical drive; about 9 onboard SATA ports are free.
 - The NAS is the natural OFF-BOX target for the WANT 19 backup.
+
+## The model drive (plugged in 2026-09-25)
+- 4 TB Seagate SkyHawk in a USB enclosure, NTFS, label Models, /dev/sda2. Simon mounts it READ-ONLY at /mnt/models. Do not write to it and do not remount it.
+- Everything is one level down, in /mnt/models/models/ (NOT /mnt/models/). 2.7 TB used: models, corpus, data, audio, video, image, embed, train, slots, wheels, plus the Cowork session's JARVIS-BRIEFING.md, MANIFEST.md, BUILD-QUEUE.md, RESEARCH-SPEC.md.
+- Those drive files were written by an earlier Claude session on Sep 23-24. Where they disagree with this part, this part wins. They call Simon "Jack"; use "Simon".
+- Verification: the size check passed for all 53 model files. The full sha256 is run by Simon from ~/model-verify/ (log and results there, not on the drive). Do not treat a model as verified until that run says so.
+- MiMo-V2.6-Pro is still two raw parts (.part1 + .part2) and must be joined with cat before it can load. Do not join it without Simon; it needs about 557 GB on the NVMe.
+- The drive holds a plain-text Hugging Face token (hf_token.txt). Never read it into a chat, a log or a finding.
 
 ## Your memory system (so both halves get used)
 - Files: state.md (snapshot), log.md (dated actions), operating-manual.md (your rules), and findings/<topic>.md written by save_finding and read by memory_search.
