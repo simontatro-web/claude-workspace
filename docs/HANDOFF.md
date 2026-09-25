@@ -55,7 +55,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 ## NVMe model copies (/home/simon/models)
 - GLM-5.3/ (437 GiB = 468 GB): copied and sha256-VERIFIED (12 files, 05:39Z).
 - Qwen3.8-Flash-Next-unsloth/ (128 GiB): copied (fn-copy unit, finished 13:48Z; unit still exists as active(exited) until `sudo systemctl stop fn-copy`, which was done). NOT yet hashed.
-- GLM-5.3-Flash/ (~188 GiB): copy RUNNING as unit glmf-copy since 14:02Z (46 GiB at 14:06, ~190 MB/s, ETA ~14:20Z). NOT yet hashed.
+- GLM-5.3-Flash/ (188 GiB): copy DONE (glmf-copy, rsync -a, active (exited) ~14:19Z, unit stopped by Simon). MEASURED: file names and byte sizes match the drive exactly, no rsync temp files left. NOT yet hashed.
 - mtp-Qwen3.8-27B-Q4_0.gguf (Jarvis's draft, production, keep).
 - Space: df showed 250G avail before the GLM-5.3-Flash copy -> ~62G avail after, plus ~46 GiB ext4 root reserve. Base system use ~55 GiB (HF cache 20G is Jarvis's model: keep; docker image 7.2 GB is Open WebUI in use: keep). Optional trim: Flash-Next BF16/Q4 MTP draft files (~16 GiB; keep the two Q8_0 drafts). MiMo join (~557 GB) will NOT fit alongside these; needs a second drive (free SATA ports) or rotating models out.
 - RAM rule: Jarvis + ONE big model at a time. GLM-5.3 ~430 GiB resident, Flash-Next ~104 GiB, GLM-5.3-Flash ~186 GiB.
@@ -84,7 +84,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 - Night-1 queue status at 14:06Z: done a1-threads, b1-interleave, b1-smt-prefill, a2-batch, a3-fa; failed b2-hybrid-cmoe, b2-hybrid-ncmoe76, b2-hybrid-ncmoe74, a5-kcache; **a6-depth RUNNING since 13:31Z (cap 4 h, until 17:31Z)**, a7-poll after it (~30 min). Jarvis back up and healthy since 09:27Z.
 
 ## Next steps, in order
-1. When glmf-copy shows ~188G and active (exited): `sudo systemctl stop glmf-copy`.
+1. DONE ~14:20Z: glmf-copy finished (188G, names+sizes match the drive) and was stopped.
 2. When `tail -3 ~/bench/queue.log` shows "Benchmark queue finished" (not before: hashing and building distort running benchmarks): hash both new copies:
    `sudo systemd-run --unit=big-verify -p User=simon -p Group=simon -p Nice=10 -p RemainAfterExit=yes -p WorkingDirectory=/home/simon/model-verify-nvme /usr/bin/python3 /home/simon/model-verify-nvme/verify.py --only Qwen3.8-Flash-Next-unsloth GLM-5.3-Flash` (~18 min; watch `journalctl -u big-verify`; then `sudo systemctl stop big-verify`).
 3. Build ik_llama.cpp CPU-only in ~/ik_llama.cpp (commands were given: clone, cmake -DGGML_CUDA=OFF -DGGML_NATIVE=ON, build llama-bench llama-server llama-sweep-bench, then grep src for glm-dsa and list its -fmoe/-mla/-rtr/-amb/-ser flags). Not done yet.
