@@ -25,3 +25,10 @@ Simon is out of Claude usage. You (Jarvis) build the first pieces of his orchest
 
 ## What the finished plan looks like (for context only)
 A job queue in SQLite that refuses to run any build job without a spec Simon approved; workers that run jobs with hard caps; a kill switch; approvals from his phone; health alerts; nightly off-box backups. The full design is in the Claude repo (docs/orchestrator-research.md, docs/orchestrator-roadmap.md); you do not need it to do your step.
+
+## Checkpoint rule (added by Simon; read this first)
+Your context is only 24,576 tokens and you cannot see how full it is.
+- Keep a block at the TOP of ~/jarvis-build/PROGRESS.md titled "RESUME HERE" (max 15 lines): current step, what is done, the exact next action, open problems, files touched.
+- Rewrite it after EVERY finished sub-task (a test passing, a commit), not only at the end.
+- If a system message says CONTEXT NEARLY FULL or CONTEXT CRITICAL: update RESUME HERE, commit, tell Simon to start a new chat, and stop.
+- A new chat reads RESUME HERE first and continues from its "exact next action".
