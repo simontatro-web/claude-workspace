@@ -53,3 +53,9 @@ Same prompts, temperature 0, fixed seed, one change per run, results saved as fi
 ## Where results go
 - On the box: ~/bench/results/<model>/ (raw llama-bench JSON/CSV, logs, the card).
 - In this repo: docs/benchmarks/<model>.md per model plus docs/benchmarks/summary.md, written by Claude from what Simon pastes back.
+
+## Tools on the box (delivered 2026-09-25)
+- ~/bench/bench.sh (source: docs/bench/bench.sh): runs one llama-bench sweep as a transient systemd unit bench-<label>, with GPUs hidden for CPU profiles, a 465G memory cap, no swap and OOM priority on the benchmark (not Jarvis). Profiles cpu1 / cpu / cpuil / gpu; cpuil and gpu refuse to start while llama-server is active.
+- ~/bench/summary.py (source: docs/bench/summary.py): prints a table from the jsonl results.
+- This llama-bench build (f4e276a20, 2026-09-21) has -d depth, -lm load mode, -ncmoe, -fitt, jsonl output. It has NO --threads-batch and no speculative decoding or --parallel, so MTP, concurrency, needle and prompt-cache tests use llama-server instead.
+- Audio, video and image models on the drive (audio.cpp, ComfyUI/Wan/LTX/Hunyuan, Z-Image) are not llama.cpp text models; they need their own runtimes and a separate test pass.
