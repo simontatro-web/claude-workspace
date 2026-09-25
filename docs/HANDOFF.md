@@ -96,6 +96,8 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 
 - Simon's full orchestrator wants received 2026-09-25: docs/orchestrator-wants-simon-2026-09-25.md (+ .docx). Role tests derived from them added to docs/benchmark-campaign.md.
 
+- Master speed-lever list: docs/speed-levers.md (Simon: "speed up in ANY and EVERY possible way").
+
 ## Next steps, in order
 1. DONE ~14:20Z: glmf-copy finished (188G, names+sizes match the drive) and was stopped.
 2. When `tail -3 ~/bench/queue.log` shows "Benchmark queue finished" (not before: hashing and building distort running benchmarks): hash both new copies:
