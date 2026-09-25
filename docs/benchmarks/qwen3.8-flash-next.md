@@ -32,7 +32,12 @@ Night 1 on GLM-5.3 measured llama.cpp reaching ~62% of STREAM. With ~3.7 GB read
 4. GSQ-RCO IQ3_XXS and Q2_0 with the best flags; KL divergence vs UD-Q4_K_XL.
 
 ## Results
-None yet.
+### fn-a0-baseline (socket 1 only, beside Jarvis, 18 threads, -r 3) - MEASURED 2026-09-25 12:42 PM CT
+| test | t/s |
+|---|---|
+| prefill pp512 | 29.35 |
+| decode tg128 | **4.10** |
+Below the 5-6 t/s estimate. 4.10 t/s x ~3.7 GB/token (ESTIMATE) = ~15 GB/s, about 51% of socket-1 STREAM (29.5 GB/s); either llama.cpp reaches less of the bandwidth on this model or it reads more bytes per token than estimated. Still ~3.7x GLM-5.3's 1.11 t/s beside Jarvis. Load + 3 reps took 5 min.
 
 ## Commands kept for later
 Build the MTP PR (only after "Benchmark queue finished"; CPU-only; production untouched):
