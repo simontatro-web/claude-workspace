@@ -77,6 +77,10 @@ state.json survives restarts. Messages over 4000 tokens are cut head 2500 + tail
 X-Ctxproxy-Skip requests pass untouched. Fail-open, but a request over limit - 1024 gets a clear 400 (the
 autopilot answers that with a fresh chat for the same run). events.jsonl: numbers only, rotates at 5 MB.
 
+## Latest (read first): A1 is DONE on the box (MEASURED; see MASTER-PLAN status log). 194 passed, smoke 8/8.
+Next: ctxproxy/README.md step 5 (service), step 6 (Open WebUI + Builder prompt v2), then autopilot/README.md.
+Before the first `jarvis-autopilot next-step`: clear the 4 untracked leftovers in ~/jarvis-build (log lists them).
+
 ## Where things stand (end of the last session, 2026-09-25 evening Chicago)
 Simon asked for Jarvis to continue automatically with no "continue" from him; he is away from his computer and
 told Claude to keep working so it is ready when he is back. Built and pushed: proxy v2.1, the autopilot,

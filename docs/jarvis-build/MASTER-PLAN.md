@@ -70,7 +70,7 @@ before gate 5; J2b and J4 become the autopilot's first real jobs; a regression r
 
 | Step | What | Builds | Installs | Status |
 |---|---|---|---|---|
-| A1 | Files on the box: ctxproxy/README.md steps 1-4 (bundle, packages, 194 tests, 8 real-server checks) | Claude (done) | Simon | built: proxy v2.1 (new-chat note, git facts) + autopilot + Builder prompt v2; tests pass off-box (see log). Not on the box |
+| A1 | Files on the box: ctxproxy/README.md steps 1-4 (bundle, packages, 194 tests, 8 real-server checks) | Claude (done) | Simon | DONE 2026-09-25 (MEASURED on the box): bundle 80ee0c6f, 194 passed in 62.89s, committed (23 files), smoke 8/8 |
 | A2 | Proxy service, Open WebUI wiring, Builder prompt v2 pasted: README steps 5-6, with the new-chat tool-call test | Claude | Simon | todo |
 | A3 | Autopilot: `jarvis-autopilot` command (root-owned), tool key in ~/.config/jarvis-autopilot.env, optional ntfy, `jarvis-autopilot check` 8/8 (autopilot/README.md 1-3) | Claude | Simon | todo |
 | A4 | Acceptance: AP-1 three autopilot runs PASS with compactions (one with 2+), nobody typing; AP-2 pause + new run picks up; AP-3 proxy restart mid-run; AP-4 seatbelt live; one Open WebUI chat run; gate 3 (new chat, "Continue." only). Then set RESERVE from report.py | Jarvis runs, Simon starts | - | todo |
@@ -190,6 +190,12 @@ New wants: Claude adds a row here and places it in a stage before anyone builds 
 Done: D3 (USB first), D4, D22 (MEASURED 2026-09-25). Standing: D18, benchmarks keep the 1-7 AM window.
 
 ## 6. Status log (newest first; one line per change, with its proof)
+- 2026-09-25 (MEASURED, Simon's paste): A1 done on jarvis-1. sha256 of jarvis-build-bundle.tgz matches;
+  `194 passed in 62.89s`; commit "J3 v2.1 + autopilot 80ee0c6f, 194 pass" (23 files); smoke_real 8/8: C3 gaps
+  +2.9/+2.0/+2.8% (over-counts, the safe side), M1 after compaction re-read 180-199 of ~11.8k tokens, new-chat
+  note 321 tokens and the next request re-read 20 of 737. Untracked leftovers in ~/jarvis-build:
+  ctxproxy/STRESS-PLAN.md.bak.v1, delegate-log.jsonl, delegate-oversized.txt, delegate-test-file.txt (must be
+  cleared before the first `next-step` run: its DONE needs a clean tree and the seatbelt blocks rm in ctxproxy/).
 - 2026-09-25: built for automatic continuation: proxy v2.1 (NEW CHAT START note with RESUME HERE and git
   facts, git facts in the compaction note, smoke test 8 checks with a start timeout), the autopilot (auto
   "continue", STATUS DONE/BLOCKED with git + verify checks, fresh chat for the same run when a chat gets too
