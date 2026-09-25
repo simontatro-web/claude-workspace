@@ -19,6 +19,8 @@ Night 1 on GLM-5.3 measured llama.cpp reaching ~62% of STREAM. With ~3.7 GB read
 - Must pass -md explicitly (auto-discovery does not look in MTP/). A shared head logs one borrow_shared_tensor error at startup from the memory-fit probe and then works; pass -c yourself.
 - Confirm it runs: log line "draft acceptance = ... mean len = ...". Default --spec-draft-n-max 2.
 - README claims stock mainline has no qwen4exp MTP graph, no borrowing and no --spec-type draft-mtp. Our build f4e276a20 DOES have --spec-type draft-mtp (production 27B uses it), so the README is at least partly out of date. Whether our build has the qwen4exp MTP graph and borrowing is VERIFY (grep the source). If not: build PR #28243 (branch danielhanchen/llama.cpp qwen4exp/mtp) in its own tree.
+- CHECKED 2026-09-25: our build f4e276a20 has NO borrow_shared_tensor and no qwen4exp MTP/nextn code (grep empty), and no commit mentioning 28243. PR #28243 "models: Qwen3.8-Flash-Next MTP" (danielhanchen, head qwen4exp/mtp) is still OPEN. So MTP for Flash-Next needs a PR build in a separate worktree (~/llama.cpp-fnmtp).
+- PR's own known issues (web check 2026-09-25): --fit does not count MTP weights; greedy output diverges at n-max >= 3 on some hardware; low acceptance (~0.36-0.39) on some GPU setups; M-RoPE position errors in later testing. So every MTP run must also check greedy output is IDENTICAL with MTP off, not just speed.
 - Vendor numbers (B200, greedy): 1.67x on UD-Q4_K_XL, acceptance ~66%. Net LOSS at concurrency 8 (0.81-0.87x). Speedup shrinks at higher temperature. CPU gain unmeasured.
 
 ## Test order
