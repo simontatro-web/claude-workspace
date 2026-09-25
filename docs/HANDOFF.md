@@ -4,7 +4,7 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 
 ## Who and how
 - The user is **Simon**. Always call him Simon. Older notes (the Cowork memory pages in `docs/wiki/`, and files on his model drive) call him "Jack": same person, never use that name. "Jackrong" is a Hugging Face uploader, not him.
-- He is in US Central time (assumed from notes; the benchmark runner uses America/Chicago; not explicitly confirmed by him).
+- He is in Chicago time (America/Chicago; CONFIRMED by Simon 2026-09-25). Give ALL times to him in Central (CDT = UTC-5 until Nov 1 2026, then CST = UTC-6). Box logs and llama-bench test_time are UTC: convert before quoting.
 - **Jarvis** is Simon's local AI assistant: Qwen3.8-27B Q4_K_M served by llama.cpp (`llama-server.service`, port 8080, both GPUs), used through Open WebUI (port 3000, docker). Jarvis has an unrestricted shell tool server (port 8200, bound to 0.0.0.0) with run_host_command, write_file, read_file, save_finding, web_search, hf_model_sizes, create_tool, list_tools, plus plugins gpu_status, memory_search, sys_summary.
 - **You cannot reach jarvis-1.** Give Simon commands to paste into its SSH terminal; he pastes the output back. He relays messages to Jarvis by hand.
 - Delivering files: terminal heredoc with a quoted, unique delimiter (`cat > FILE <<'X_END' ... X_END`), then verify with `wc -l`, `wc -c`, `sha256sum | cut -c1-16`. Compute the expected numbers in your own sandbox first and tell Simon what to expect. His terminal garbles the echo of long pastes; the file still lands intact: trust the checksum. Never deliver files through Jarvis's write_file (the 27B breaks tool-call JSON on long strings).
