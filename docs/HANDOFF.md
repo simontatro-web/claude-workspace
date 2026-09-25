@@ -93,6 +93,8 @@ You are picking up from earlier Claude Code sessions. Read this whole file befor
 - GSQ-RCO file names still needed: ls the IQ3_XXS/ and Q2_0/ subfolders on the drive.
 - llama-server test harness: not written yet (next thing to write).
 
+- Simon's full orchestrator wants received 2026-09-25: docs/orchestrator-wants-simon-2026-09-25.md (+ .docx). Role tests derived from them added to docs/benchmark-campaign.md.
+
 ## Next steps, in order
 1. DONE ~14:20Z: glmf-copy finished (188G, names+sizes match the drive) and was stopped.
 2. When `tail -3 ~/bench/queue.log` shows "Benchmark queue finished" (not before: hashing and building distort running benchmarks): hash both new copies:

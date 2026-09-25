@@ -59,3 +59,12 @@ Same prompts, temperature 0, fixed seed, one change per run, results saved as fi
 - ~/bench/summary.py (source: docs/bench/summary.py): prints a table from the jsonl results.
 - This llama-bench build (f4e276a20, 2026-09-21) has -d depth, -lm load mode, -ncmoe, -fitt, jsonl output. It has NO --threads-batch and no speculative decoding or --parallel, so MTP, concurrency, needle and prompt-cache tests use llama-server instead.
 - Audio, video and image models on the drive (audio.cpp, ComfyUI/Wan/LTX/Hunyuan, Z-Image) are not llama.cpp text models; they need their own runtimes and a separate test pass.
+
+## Role tests added 2026-09-25 (from Simon's orchestrator wants, docs/orchestrator-wants-simon-2026-09-25.md)
+The slot decision needs numbers per ROLE, not just raw t/s. Add to each model card where it applies:
+- Front desk / voice: time-to-first-token on a short prompt with a warm cache, and short-answer latency end to end. Speech needs only ~3-5 t/s, but TTFT under ~1 s.
+- Spec interviewer: given 10 vague task requests, score the questions asked (coverage of a hidden checklist of what Simon actually meant) and whether the restatement adds real understanding instead of echoing.
+- Router: accuracy on a labelled set of ~50 tasks (which slot should take it), plus latency. Candidates include the small router on the drive.
+- Big fresh-context builder (GLM-5.3, MiMo): cold-load time from NVMe and from the USB drive (-lm dio), prefill + decode at 8K/16K/32K fresh context, since each job starts a new chat.
+- Reviewer: catches planted bugs in a build, with grounding (tests, page load) available.
+- Everything: hallucination checks on questions with known answers, including "I don't know" when the answer is not in context.
