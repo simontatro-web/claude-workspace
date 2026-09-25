@@ -163,3 +163,199 @@ Recommended: self-host **ntfy** on the box, tailnet-only, with `auth-default-acc
 - **What:** one systemd target, `jarvis-autonomy.target`. Every autonomous unit (worker, scheduler, research, RSI, llama-swap slots) is `PartOf=` it. `systemctl stop jarvis-autonomy.target` stops all of them at once. Production 27B, Open WebUI, and the health watchdog are NOT part of it, so you never lose the chat or the alarms.
 - **Belt and braces:** a pause flag (a row in the `jarvis-core` database) that every worker checks before claiming work.
 - **From your phone:** a pinned ntfy "PAUSE ALL" action, plus a button in the control room. Both need your credential. `jarvis` cannot un-pause itself.
+
+---
+
+## 3. Your 15 new wants, one by one
+
+### N1. The spec interview, every time, before anything is queued ("I WANT THE MIDDLE MAN MODEL TO 100% do this everytime")
+
+**Have**
+- A tested pattern from the research spec (`deep-research-optimization`, "THE SCOPING INTERVIEW"): the output is a contract, and "what would change the answer" is the single best question.
+- The approvals table design from Sep 14 (jarvis-orchestrator, MEASURED working then).
+- The 27B on the GPUs, the only model fast enough to hold a conversation.
+- A role test already defined in `docs/benchmark-campaign.md` ("Spec interviewer"). Not run yet.
+
+**Missing**
+- The gate (section 2.3).
+- The interview flow itself.
+- The restatement check.
+- A way to test that the spec really carries your vision.
+
+**How it should work**
+1. **The gate:** section 2.3. This part can be made truly 100%: the worker will not claim a build or research job without your approved, unmodified spec. Tested by trying to enqueue an unapproved job (refused) and by trying to write the database as `jarvis` (permission denied).
+2. **The interview is driven by a checklist per job type, not by the model's mood.**
+   - Each job type (website, app, tool, research, self-change, purchase research) has a checklist stored in the database.
+   - Website example: purpose; who uses it; pages and features; data it keeps; look and feel; where it runs; what "done" means as checkable tests; what is out of scope; budget and deadline; "what would make you say it's wrong".
+   - The model may not propose the spec while any item is empty. You can answer "you decide" for an item; it is then recorded as an **assumption** you approve later.
+   - Tiny jobs (a timer app) get a short checklist but still go through the gate, as you asked.
+   - The interviewer asks one or two questions at a time and saves each answer into `spec_turns` straight away ("saving it to memory along the way"). A chat that dies or truncates loses nothing.
+3. **The restatement must be the model's own picture, and code checks that.** When proposing, the model must fill fixed sections:
+   - (a) a walkthrough of the finished thing from your point of view ("you open it, you see...");
+   - (b) things it inferred that you never said, each marked as an inference;
+   - (c) assumptions and defaults it chose;
+   - (d) acceptance tests: concrete, checkable, each one pass or fail;
+   - (e) out of scope;
+   - (f) risks and open questions.
+
+   A mechanical check rejects an echo before you ever see it:
+   - word n-gram overlap with your own interview answers above a threshold (e.g. >50% of 4-grams copied; to be tuned against real interviews): ESTIMATE threshold;
+   - fewer than N inferences;
+   - any acceptance test that is not checkable.
+
+   You approve, or edit and approve. The approval stores the hash.
+4. **"Does it really understand?": test it, don't trust it.** After you approve, a **fresh** model instance that sees only the spec (not the chat) answers an automatic quiz generated from your interview answers ("what happens when a student gets a question wrong?"). Wrong answers mean the spec document does not carry your vision, and the gap goes back to you before the build starts. This is also exactly your later idea of quizzing the big reviewer model (N12). It matters because every downstream model gets only the spec, never the chat.
+
+**Which model**
+- The 27B (only interactive-speed model; decode speed on the current config is VERIFY).
+- An optional overnight "spec critic" pass by a bigger model (GLM-5.3 measured 1.0-1.5 t/s) adds any missing questions to your morning list without slowing the conversation.
+- How well the 27B asks questions is **not measured**. Run the "spec interviewer" role test in benchmark-campaign.md before trusting it: 10 vague requests, each with a hidden checklist, scored on coverage.
+
+**Risks and honest limits**
+- The gate is 100%. The *understanding* is not and cannot be; it is measured by the quiz and your approval. A model can pass an overlap check and still be wrong about what you meant.
+- Fatigue: for every tiny task, a full interview will get annoying. The checklist-size-per-type design is the pressure valve. You can also set a type as "express" (3 questions), which still needs your approval.
+- **Context:** the 24,576 window and xhigh reasoning fill fast. Long interviews must live in the database, not the chat (hence `spec_turns`).
+- **Open WebUI cannot enforce a flow.** The interview runs either as an Open WebUI "pipe" function that talks to the job API, or on its own page. The tools the model gets are `spec_draft_update`, `spec_propose`, `spec_status`. There is no `spec_approve`.
+
+### N2. Jarvis builds and improves itself ("Make this UI ... route certain tasks to certain models")
+
+**Have**
+- create_tool, write_file, self-restart, and a proven "Claude writes the spec, Jarvis writes the code" pattern: the 124-line browser agent written first try, Sep 12 (jarvis-system-build W4).
+- GVS5H already proven on this box for coding (MEASURED Sep 14: job 25 done end to end, 27 min, 7 calls).
+
+**Missing**
+- Self-changes going through the same gate as everything else.
+- A staging area.
+- A promotion step.
+- A scorer.
+
+**How it should work.** A self-change is just a job with `type = self_change`:
+1. Spec interview (N1).
+2. The build happens in a **sandbox**: a git branch in a job workspace owned by `jarvis`, run under `jarvis-sandbox-<job>` units or rootless containers, on test ports. Never on 8080, 3000, or the tool server's live port.
+3. Tests and the scorer run as `jarvis-eval` (section 2.1).
+4. Promotion to live is a separate approval from your phone, showing the diff summary and the test results.
+5. Promotion is done by `jarvis-core` with a pre-promotion backup, so undo is one command.
+
+create_tool stays, but plugins load into the `jarvis` tool server only. They cannot touch production, because the tool server runs as `jarvis`.
+
+**Which model**
+- The 27B orchestrates, with GVS5H-style decomposition. GVS5H claims 69.2 → 92.4% on LiveCodeBench-hard for this exact 27B (SOURCE: [GVS5H README](https://github.com/slee-persis/GVS5H), via agent-harnesses). Not reproduced on this box.
+- AA shows the 27B at **6% on Terminal-Bench** (model-benchmark-dataset, SOURCE: AA). It is weak as a free-roaming shell agent, which is another reason builds should be tests-driven steps, not open shell sessions.
+- Flash-Next and GLM take the hard pieces (N3).
+
+**Risks**
+- Self-modification plus an unrestricted shell is exactly the setup behind the pkill incidents and the runaway GGUF-parser loop. Everything in this want depends on section 2.1 existing first.
+- Every job needs hard iteration and wall-clock caps, in code (jarvis-incidents, Sep 21 evening).
+
+### N3. Routing jobs to big models with fresh context each time
+
+**Your idea is right, and the measurements back it.**
+- GLM-5.3 decode falls as context grows: 1.106 → 0.928 → 0.74 t/s at depth 0 / 4K / 16K beside Jarvis.
+- Prefill falls far faster: ~10 t/s empty → ~2.5 t/s at 16K (MEASURED, docs/benchmarks/glm-5.3.md).
+- So "one task, full spec, new chat, then close it" is the correct way to use the big models. It is also the pattern research found works best, the verification-subagent / ledger pattern: fresh instances get the spec plus artifacts, not the history (deep-research-optimization, agent-harnesses).
+
+**What a single big-model call costs** (ESTIMATE from measured GLM rates)
+- An 8,000-token brief (spec + relevant files) at ~4-7 t/s prefill: **~20-35 min before the first output token**.
+- 5,000 output tokens including reasoning at ~0.85-1.4 t/s: **~1-1.6 h**.
+- So **~1.5-2.5 h per GLM-5.3 call**. A build of ten such steps is a night or more.
+- GLM-5.3 is therefore a **single-shot** model: one well-specified hard piece, a design, or a final review. It is never an agent in a multi-turn tool loop.
+- **Flash-Next** is the realistic big "worker": ~5-10 t/s estimated, prefill **not measured**. That number decides how much of the building it can take.
+
+**How it should work**
+- The job worker (code) prepares the brief: the spec, the acceptance tests, only the files the step needs, and a required output format (a patch, a file, a JSON verdict).
+- It calls the big model through llama-swap in a new request with no history, stores the output as an artifact, runs the tests, and records the step.
+- "Incorporating what they built" is done by the worker plus tests plus the reviewer (N12), and promotion needs your approval. The small model never "pastes it in" unchecked.
+- Prompt caching: every call starts fresh, so cross-call caching barely matters. The one exception is a fixed system prefix for GLM. GLM's dense MLA cache is the low-risk kind for reuse (context-and-speed-per-model). VERIFY with `-lv 4`.
+
+**Which model**
+- Default worker: Flash-Next (unmeasured).
+- Hard single shots and final reviews: GLM-5.3 (measured 1.0-1.5 t/s decode).
+- GLM-5.3-Flash as a possibly faster middle rung: unmeasured, and it needs the Unsloth fork build.
+- MiMo only as an event: N4.
+
+**Risks**
+- Throughput: the queue will hold hours of big-model work per job. The ETA shown must come from `runs` medians, not guesses.
+- RAM: Flash-Next (~104 GiB) and GLM-5.3 (~430 GiB) cannot both be resident next to Jarvis. The admission controller unloads one first.
+
+### N4. Route to any model, including loading MiMo from the HDD; use every resource; ask me when something is missing
+
+**Have**
+- Every model file (drive plus NVMe), the RAM rule, `-lm dio` direct loading (MEASURED working for GLM).
+- The `systemd-run` launch pattern with memory caps (MEASURED).
+- hf_model_sizes.
+
+**Missing**
+- llama-swap plus the admission controller (section 2.4).
+- The `models` table.
+- A "missing resource" request type.
+
+**How it should work**
+- The router asks "which slot?" and the admission controller asks "can it load now, and what has to unload?".
+- If a model is on the drive but not on the NVMe, the controller either:
+  - loads straight from the drive (read-only mount; USB read speed limits it), or
+  - queues a copy job (rsync plus sha256 verify, as done for GLM) for your approval.
+- If the resource does not exist (a model, a package, disk space), Jarvis files a `resource_request` approval saying what, why, size and where. You approve a download, or add it to the fast-house batch list.
+
+**Load times** (ESTIMATE; measured load times are not on file, VERIFY)
+- From the USB HDD (~150-250 MB/s for a 4 TB CMR disk; USB 3.0 allows more):
+  - GLM-5.3 at 468 GB: **~35-50 min**
+  - MiMo at 557 GB: **~40-60 min**
+- From the 990 PRO: this board's PCIe 3.0 x4 caps it near ~3.5 GB/s, so **~2-3 min for GLM-5.3**, plus CPU repacking time at load.
+
+**MiMo specifically: this cannot work the way you pictured it**
+1. It is two raw parts and **must be joined into one file first** (~557 GB). llama.cpp cannot load the raw parts. There is no room on the NVMe today (~62 GB free). The join needs either:
+   - a new 2 TB drive (section 10), or
+   - removing the GLM-5.3 NVMe copy (the drive keeps the original) and more; tight even then (ESTIMATE: 55 base + 128 Flash-Next + 188 GLM-Flash + 519 MiMo ≈ 890 GiB of ~915 usable).
+2. It fits only with the experts in RAM (~466 GiB) and ~30 GiB of other tensors on **both** GPUs, which means **the 27B must be stopped** (mimo-v2.6-feasibility, SOURCE; unmeasured on this box).
+3. So "Jarvis loads MiMo" means **Jarvis turns itself off** for the whole MiMo session. With ~14 GiB of RAM left, a tiny CPU "night receptionist" (the 1.7B router model) could still answer status questions from the database during the run: ESTIMATE, unmeasured.
+
+This makes MiMo a scheduled, approved event (night window, like the benchmark runner's 1-7 AM rule), never an automatic routing target. Expected speed ~2-5 t/s (ESTIMATE, SOURCE: wiki), prefill unmeasured.
+
+**Risks**
+- Automatic loading is exactly what can starve production RAM. The admission controller must never unload or stop the production 27B. That is enforced by the 27B's unit being root-owned and outside llama-swap, not by a rule.
+- Jarvis downloading by itself uses the NVMe's scarce free space and your home bandwidth. Default: Jarvis writes the download manifest; you or the fast house pulls it.
+
+### N5. An always-on self-improvement (RSI) loop: intelligence, speed, capability
+
+**Have**
+- The plan in Part 4 (the scorer it cannot tamper with, GEPA first, DGM-style code changes later, no training on its own outputs).
+- The benchmark tooling (bench.sh, queue-runner.sh) with night windows.
+- create_tool.
+
+**Missing**
+- The unwritable scorer.
+- The held-out set.
+- Version lineage.
+- Caps.
+- An optimizer.
+
+**Options found**
+- **GEPA** for prompts and other text components.
+  - Reflective evolution with a Pareto frontier.
+  - Claims 100-500 evaluations where RL needs 5,000-25,000+.
+  - Works with local models through LiteLLM `api_base`, has an `optimize_anything` API with a custom evaluator.
+  - MIT, ~6.7k stars (SOURCE: [github.com/gepa-ai/gepa](https://github.com/gepa-ai/gepa)).
+- **OpenEvolve** (open AlphaEvolve) for code with an evaluator.
+  - Any OpenAI-compatible API, checkpointing, Apache-2.0, ~7.4k stars.
+  - Its docs describe **no sandbox for the evaluated code** (SOURCE: [github.com/algorithmicsuperintelligence/openevolve](https://github.com/algorithmicsuperintelligence/openevolve)), so it must run inside the `jarvis-sandbox` fence.
+- **Self-Harness** (edits the harness, keeps weights and evaluator fixed): the method to copy (agent-harnesses, SOURCE: arXiv 2606.09498).
+- **Scorer tooling**:
+  - promptfoo for prompt-regression suites (in the local-eval-harness wiki page);
+  - lm-evaluation-harness `--model gguf` for anchors;
+  - `llama-perplexity --kl-divergence` for quant and flag quality (local-eval-harness, SOURCE there).
+
+**How it should work, honestly scoped**
+- **What "improve itself" can really mean here, in order of safety:**
+  1. prompts, routing thresholds, checklists;
+  2. llama-server flags, only through the benchmark queue with A/B and your approval to promote;
+  3. tool and harness code in the sandbox, scored by `jarvis-eval`;
+  4. LoRA adapters for style (W6).
+- **What it cannot mean:** raising the models' own intelligence. Training on its own outputs is not viable (Part 4), and the weights are fixed. Put plainly: this is continuous, measured tuning of the scaffolding around fixed models, not an intelligence explosion. Scaffolding still matters a lot: GVS5H's +23 points came from scaffolding alone.
+- **The loop:** propose a change, run it in the sandbox, `jarvis-eval` scores it on the public set and then the held-out set, and it is archived either way. If both sets improve and nothing regresses: a promotion approval goes to your phone. Caps per night: iterations, wall clock, tokens. A no-progress detector stops it. The kill switch covers it.
+- **Always on vs your chat:** the loop is a batch job at the lowest priority. It gets the GPU 27B only through the batch semaphore (one slot always free for you), and the CPU big models mainly at night.
+- **Start order:** the loop's first job is not optimisation. It is proving the scorer catches a planted regression (Part 4: "Code self-modification only after the scorer has caught a real regression").
+
+**Risks**
+- The documented failure from the literature: Darwin Gödel Machine runs **faked test logs and removed detectors**, even with the detectors hidden (Part 4, jarvis-progress). That is why the scorer must be unwritable, not merely hidden (section 2.1).
+- Held-out leakage: if `jarvis` can read the held-out tests, scores become meaningless. They live mode 700 under `jarvis-eval`.
+- **Conflicts with N13 ("never break") by nature.** It is only compatible because promotion needs your approval and the production units are out of its reach.
