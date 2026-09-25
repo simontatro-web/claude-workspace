@@ -698,3 +698,114 @@ The design makes failures contained (fences), noticed (watchdog), and recoverabl
 - The health watchdog (alerts on absence), the control room (visibility), and the kill switch.
 - Regression suites run before any prompt, flag or model change (ADD 2).
 - The glitch that bites most today is context truncation. It is solved by moving work out of the chat, not by a bigger window, which the GPUs can't hold (HANDOFF).
+
+---
+
+## 4. The 24 Part 4 wants, mapped onto this design
+
+Most are covered by an N-section above. The rest keep the plans already in the wiki; this table says where each stands and what it depends on.
+
+| # | Want | Where covered / what it needs | Depends on |
+|---|---|---|---|
+| W1 | Voice dispatcher from the phone | N10 | Front-desk tools, reasoning-off preset; freed GPU for best latency |
+| W2 | Two jobs at once while talking | Batch semaphore: the 27B runs `--parallel 2`, so at most 1 batch job on the 27B plus your reserved slot. CPU big models are separate slots. Aggregate throughput with 2 parallel requests is not measured (benchmark-campaign "concurrency"). | Job worker |
+| W3 | Models review models, grounded | N13, section 2.5 | Grounding checks per job type |
+| W4 | Control room | N12 | `events` table |
+| W5 | YouTube video pipeline | Keep the wiki plan (video-generation-v100): Wan 2.2 recommended; PyTorch cu126 wheel only; no BF16/FP8; flash attention is a known NaN source on Volta for LTX. Clip generation needs a **whole GPU** → a Jarvis-off window or the freed card. The heavy-GPU lock (GAP 4) forbids a render during a two-card LLM load. | Exclusive GPU slot, admission controller, approvals for posting |
+| W6 | Training AI (QLoRA) | Unsloth on Volta, fp16, 7-9B target; llama-server can serve LoRA adapters (finetuning-and-rpc-pooling). Needs an exclusive GPU window and **data (W22)**. | W22 corpus, GPU window |
+| W7 | AI inside your websites | A separate public preset: no tools, no memory, its own port, auth, rate limit; precompute content overnight and serve it static. Gates: Qwen3Guard, prompt-injection classifier. Never the Jarvis preset. | Fences, a static host; public exposure is your decision |
+| W8 | Teaching and diagnosis | `skills` table from real graded work only; drill locally; deep conceptual teaching escalates (the local ceiling, W9); N7 video finder | Learner model; never graded work |
+| W9 | Escalation ladder | 27B → Flash-Next / GLM (single-shot, N3) → frontier for what neither clears, arriving prepared. A **budget counter** caps frontier spend (GAP 5). | Router, frontier API decision |
+| W10 | AR glasses | A later client of the voice stack; capture-only first; deliberate single captures (image prefill makes streaming impractical) | N10 |
+| W11 | Robotics | Model → tool → broker (Home Assistant REST / MQTT) → device; limits in firmware; every actuation logged and approval-gated at first | Fences, approvals |
+| W12 | 3D printer end to end | OpenSCAD code path; headless slicer; mechanical checks (manifold, walls, overhangs, plate fit); print-watching by camera. **Which printer you bought is still unrecorded** (Bambu needs LAN-only + Developer Mode). | Your printer model |
+| W13 | "Hey Jarvis" | iOS Vocal Shortcuts (no code) → POST to the voice or front-desk endpoint over Tailscale; openWakeWord `hey_jarvis` for a home device (no published error rates; measure in your room) | N10 |
+| W14 | Email and calendar triage | N11 | Account decisions |
+| W15 | Marketplace watches | Saved searches as scheduled jobs; ntfy on a hit. Facebook only via a paid proxy scanning service, never your login. eBay has an official Browse API (free developer account; VERIFY terms). Craigslist feeds: VERIFY current availability. | Scheduler, a paid-service decision for Facebook |
+| W16 | Workout reminders and diet | Scheduled nudges plus a plan you approve (approvals table) | Scheduler, ntfy |
+| W17 | Location nudges | Deprioritised (your call, Sep 14) | n/a |
+| W18 | Music taste | Deprioritised | n/a |
+| W19 | Backup and recovery | Roadmap step 1: restic nightly off-box, SQLite-safe, restore drill | A target decision |
+| W20 | Daily audit log | The `events` table + the tool server's command log (exists: `~/jarvis-run-host-commands.log`) → a daily digest; logs backed up off-box | Events table |
+| W21 | Overnight goal research | N6, scheduled; one goal per night | N6 |
+| W22 | Writing capture | **Start now, it gates W6.** A drop folder + an export of your own messages from Open WebUI chats, tagged by source. Only text you wrote yourself, because AI-assisted text would teach the model its own style. | Nothing (a script) |
+| W23 | Build your own AI | Learning track: microgpt first, then micrograd, makemore, nanoGPT on a V100 (needs a GPU window) | GPU window |
+| W24 | Uncensored model for hardening | A separate preset, no tools, no memory, no secrets. HauhauCS Q5_K_P is on the drive, but its FastMTP patch is required (model-download-manifest). Red-team **advisor** for your own box only. | Fences (what-not-to-do #23) |
+
+**Also on your board, and time-critical: the schoolwork due-date tracker.** It is the only item with a real external deadline, and it still has zero code (Part 4 priority 2).
+- It must not depend on experimental services (GAP 6): its own small unit, its own table, and ntfy.
+- The roadmap puts it right after the job spine, because it reuses the scheduler and notifier and nothing else.
+
+---
+
+## 5. Conflicts between wants, and what cannot be done as asked
+
+1. **Unrestricted shell as `simon` (Sep 21) vs "never break".** Both cannot hold. The fences keep the shell unrestricted, but as `jarvis`. **Decision D1.**
+2. **"100% every time" interview vs speed.** The gate is 100%. The interview's *quality* is measured, not guaranteed. A full interview for every tiny job will cost you time; express checklists per type are the release valve. Voice may *start* an interview; it can never skip one.
+3. **Big models for building vs their speed.** GLM-5.3 is measured at 1.0-1.5 t/s decode and ~2.5-10 t/s prefill. Each call is ~1.5-2.5 h (ESTIMATE). It can do single-shot pieces and final reviews, never agent loops. Flash-Next's real speed is the open question that decides how much building moves off the 27B.
+4. **"Load MiMo on demand" vs "Jarvis always on".** MiMo needs both GPUs and ~489 GiB RAM, so Jarvis must be off while it runs. It is also not joined yet, and there is no disk space to join it. It can only ever be a scheduled, approved event.
+5. **Human-speed voice vs a capable model vs VRAM.** Sub-500 ms voice-to-voice is not reachable with a 27B via speech-to-text → model → text-to-speech on V100s. ~0.7-1.3 s probably is (ESTIMATE), and only with a freed GPU.
+6. **Every GPU want competes for the one card the re-layout might free:** voice (N10), uncensored model (W24), video (W5), fine-tuning (W6), nanoGPT (W23), and the Qwen3-VL-32B vision slot. Only one of them can be the resident tenant; the rest take scheduled windows. **Decision D13.**
+7. **Front desk "fast" vs xhigh reasoning.** Reasoning must be per role: off for front desk and voice, high for building and review.
+8. **"Use every resource" vs the RAM rule (Jarvis + one big model), the 15 A circuit, and ~62 GB free NVMe.** The admission controller will say no often; it says why, on the control room and on your phone.
+9. **"Do anything I could do" vs your hard boundaries.** Graded work is excluded by your rule. Send/buy/post/delete need your approval. Logins, 2FA and CAPTCHAs need you.
+10. **"Jarvis downloads it itself" vs home bandwidth, NVMe space and your fast-house batching.** Default: Jarvis prepares the manifest and you approve.
+11. **"No hallucinations" vs measured model behaviour.** Every local model scores ≤0 on AA-Omniscience except GLM-5.3 (+14). The design controls, grounds and flags. It cannot reach zero.
+12. **"A reviewer that knows 100% what I want."** It knows exactly what is written in the approved spec, the interview and your recorded preferences. Your quiz makes that measurable. 100% is not a reachable number.
+13. **Always-on RSI vs your chat speed and vs "never break".** RSI is batch, lowest priority, sandboxed, and promotes only with your approval.
+14. **The benchmark campaign vs the orchestrator build.** Both want Jarvis-off windows and RAM. You set benchmarks first; most of the safety steps in the roadmap need no downtime, so both can proceed. The heavy steps are placed after the benchmark windows.
+15. **Public websites (W7) vs a box that holds your accounts and a shell.** Keep public inference off this box, or strictly separated (its own preset, user, port and auth). Precomputed static content is the safe default.
+
+---
+
+## 6. Models and slots: who does what, with the evidence
+
+"Measured" means on jarvis-1. Everything else is labelled.
+
+| Role | Model | Where it runs | Speed evidence | Status |
+|---|---|---|---|---|
+| Front desk, interviewer, voice, orchestrator | Qwen3.8-27B Q4_K_M + MTP | 2x V100 (production 8080) | Older runs: 28-83 t/s decode depending on config; ~630-650 t/s prefill on Sep 22 (MEASURED then). **Current config: VERIFY.** Time-to-first-token: not measured. | Resident |
+| Router / classifier / triage | Qwen3-1.7B Q4_K_M (A/B: Qwen3.8-2B distill), grammar-forced labels + log-probability confidence, no tools | CPU | Not measured. "Well under a second" per label (ESTIMATE, jarvis-orchestrator). | On drive (slots/) |
+| Worker for long-context building and reading | Qwen3.8-Flash-Next UD-Q4_K_XL (+MTP via the PR build) | CPU, socket 1 beside Jarvis | ~5-6 t/s beside Jarvis, ~10 interleaved (ESTIMATE). **Prefill unmeasured**, which is the deciding number. | On NVMe, not hashed |
+| Hard single-shot pieces, final review, nightly synthesis | GLM-5.3 UD-Q4_K_XL | CPU, both sockets; exclusive | **1.48 t/s decode interleaved (Jarvis off), 0.9-1.1 beside; prefill ~10 → ~2.5 t/s from empty to 16K (MEASURED)** | On NVMe, verified |
+| In-loop reviewer (other family), mid rung | GLM-5.3-Flash UD-Q4_K_XL | CPU, one socket | Not measured; needs the Unsloth fork build | On NVMe, not hashed |
+| Rare "ask one hard question" event | MiMo-V2.6-Pro MXFP4 | Whole box, Jarvis off | ~2-5 t/s (ESTIMATE, SOURCE wiki); nothing measured | Raw parts on drive; needs join + ~519 GiB free disk |
+| Groundedness gate | HHEM-2.1-Open (or MiniCheck) | CPU | Milliseconds per pair (SOURCE: wiki); not measured here | HHEM queued in pull_orch; VERIFY on drive |
+| Retrieval | Embeddings + reranker (0.6B wide, 4B final) | CPU | Not measured | On drive (embed/, verify/) |
+| Safety filters | Prompt-injection classifier; Qwen3Guard-Gen-4B for public presets | CPU | Not measured | Qwen3Guard on drive; classifier VERIFY |
+| Website visual check | Qwen3-VL-4B | CPU | Not measured | On drive (verify/) |
+| Speech-to-text / text-to-speech | Moonshine or Parakeet (or Whisper), Kokoro-82M | CPU now; GPU after the re-layout | Not measured; CPU text-to-speech likely ~1-2 s per short sentence (SOURCE snippets) | Qwen3-ASR on drive; Kokoro VERIFY |
+| Red-team advisor | HauhauCS 27B Uncensored | GPU window or the freed card | Not measured; FastMTP patch required | On drive |
+
+**What would change this table:** the Flash-Next day-1 queue (already written: docs/bench/queue-fn.txt) and the llama-server harness (KV per token, MTP, `--parallel`, time-to-first-token). **The benchmark session owns those; this plan depends on their results.**
+
+---
+
+## 7. VERIFY: read-only checks that settle open questions
+
+Each one reads only. None starts, stops, installs, writes or edits anything. Best run when no benchmark is running (a few read the disk).
+
+| # | Settles | Command |
+|---|---|---|
+| V1 | Who can do what today: groups and sudo rights | `id simon; getent group sudo docker; sudo -l -U simon` |
+| V2 | What listens on the LAN (8080, 3000, 8200, others) | `sudo ss -ltnp` |
+| V3 | Current units and their settings | `systemctl list-units --all 'jarvis*' 'llama*' 'bench*' --no-pager; systemctl cat llama-server jarvis-run-host-commands --no-pager` |
+| V4 | Whether production is protected from the OOM killer | `systemctl show llama-server -p OOMScoreAdjust -p MemoryMax -p Restart` |
+| V5 | Free space and memory right now | `df -h / /mnt/models; free -g` |
+| V6 | Which small models and datasets actually landed on the drive | `ls /mnt/models/models/slots /mnt/models/models/embed /mnt/models/models/verify /mnt/models/models/audio 2>&1 \| head -80` |
+| V7 | Whether HHEM, RAGTruth, Kokoro and the injection classifier are on the drive | `find /mnt/models/models -maxdepth 4 \( -iname '*hhem*' -o -iname '*ragtruth*' -o -iname '*kokoro*' -o -iname '*injection*' -o -iname '*simpleqa*' \) 2>/dev/null \| head -40` |
+| V8 | Which corpora landed (PMC, PubMed, Wikipedia ZIM) | `ls -la /mnt/models/models/corpus /mnt/models/models/data 2>&1 \| head -60` |
+| V9 | Current 27B speed per request (prompt and generation timings from real chats) | `journalctl -u llama-server --since "-24h" --no-pager \| grep -E "prompt eval time\|  eval time\|draft acceptance" \| tail -30` |
+| V10 | Whether reasoning can be switched off per request (chat template) | `curl -s http://127.0.0.1:8080/props \| python3 -c "import json,sys; print(json.load(sys.stdin).get('chat_template',''))" \| grep -n -i -E "reasoning\|enable_thinking" \| head` |
+| V11 | Whether `/slots` and `/metrics` are enabled | `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/slots; curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/metrics` |
+| V12 | Driver/kernel update exposure | `apt-mark showhold; uname -r; dkms status; grep -v '^\s*//' /etc/apt/apt.conf.d/50unattended-upgrades \| grep -v '^\s*$' \| head -40` |
+| V13 | Tailscale exposure | `tailscale serve status; tailscale status \| head -20` |
+| V14 | Firewall state | `sudo ufw status verbose; sudo nft list ruleset \| head -60` |
+| V15 | Backup tooling present; key files exist (names only, never print keys) | `restic version; ls -la ~/.config/jarvis/` |
+| V16 | Did the headed-Chrome/CDP browser stack survive the rebuild | `systemctl list-units --all --no-pager \| grep -i -E "chrome\|xvfb\|vnc\|browser"` |
+| V17 | Open WebUI version (for voice mode and pipe-function support) | `sudo docker inspect open-webui --format '{{.Config.Image}} {{.Created}}'` |
+| V18 | Model drive USB link speed (load-time estimate) | `lsusb -t` (then, only when idle, a read-only speed test: `sudo hdparm -t /dev/sda`) |
+| V19 | NVMe PCIe link (load-time estimate) | `sudo lspci -vv \| grep -A40 -i "non-volatile" \| grep -E "LnkCap:\|LnkSta:"` |
+| V20 | GLM-5.3 load time from NVMe (if the glm-test server was ever started) | `journalctl -u glm-test --no-pager \| grep -i -E "load time\|loaded\|listening" \| head` |
+| V21 | Open WebUI web search backend | Look only: Admin → Settings → Web Search |
+| V22 | D2L calendar feed / Gmail app passwords | In your browser: D2L Calendar → Subscribe; Google Account → Security → App passwords (look, don't create) |
