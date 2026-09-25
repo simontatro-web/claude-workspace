@@ -1,0 +1,10 @@
+# GLM-5.3 night 1. Format: <label> <profile> <max-hours> <llama-bench args...>
+# cpu = runs beside Jarvis. cpuil = needs Jarvis stopped (only 1-7 AM Central).
+glm-a1-threads cpu 2 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 18,32,36 -p 512 -n 64 -r 2 -v
+glm-a2-batch cpu 2 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 -p 4096 -n 0 -b 4096 -ub 512,1024,2048,4096 -r 1
+glm-a3-fa cpu 3 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 -fa on,off -p 512 -n 64 -d 0,8192 -r 1
+glm-a5-kcache cpu 3 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 -fa on -ctk f16,q8_0,q4_0 -p 0 -n 64 -d 0,16384 -r 1
+glm-a6-depth cpu 4 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 -p 0 -n 64 -d 0,4096,16384,32768 -r 1
+glm-a7-poll cpu 2 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 --poll 0,50,100 -p 512 -n 64 -r 2
+glm-b1-interleave cpuil 3 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36 -p 512,4096 -n 64 -d 0,16384 -r 1
+glm-b1-smt-prefill cpuil 2 -m /home/simon/models/GLM-5.3/UD-Q4_K_XL/GLM-5.3-UD-Q4_K_XL-00001-of-00011.gguf -ngl 0 -lm dio -lzm off -t 36,72 -p 4096 -n 0 -r 1
