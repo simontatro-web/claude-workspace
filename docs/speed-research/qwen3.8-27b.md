@@ -2,7 +2,7 @@
 
 Written 2026-09-25 (evening, Central time) for Simon. This is an independent pass for this model only.
 Labels: **MEASURED** (on jarvis-1, with date), **SOURCE** (link), **ESTIMATE** (arithmetic shown), **VERIFY** (not checked; the command that settles it is in section E).
-Scripts: `docs/speed-research/scripts/j27_logstats.py` (77 lines, 3,464 B, sha256 `fb7817288dbaffa2`), `t27_window.py` (390 lines, 22,533 B, `05d965589667b06d`), delivered to the box with `deliver-27b.sh` (476 lines, 26,642 B, `b24fe79be242015f`). Both scripts were tested here against a fake llama-server with stubbed `systemctl`/`systemd-run`/`nvidia-smi`, including stored-reference reuse, missing-file skips and SIGTERM → Jarvis restored. They have not run on the box yet.
+Scripts: `docs/speed-research/scripts/j27_logstats.py` (77 lines, 3,464 B, sha256 `fb7817288dbaffa2`), `t27_window.py` (390 lines, 22,549 B, `7496be3d3cce3c3c`), delivered to the box with `deliver-27b.sh` (476 lines, 26,658 B, `540fb6ae57f23fa7`). Both scripts were tested here against a fake llama-server with stubbed `systemctl`/`systemd-run`/`nvidia-smi`, including stored-reference reuse, missing-file skips and SIGTERM → Jarvis restored. They have not run on the box yet.
 
 ## A. Current state
 
@@ -74,11 +74,11 @@ Do (Simon): open docs/speed-research/scripts/deliver-27b.sh on branch claude/spe
 Takes: 1 minute.
 Expected last lines:
   j27_logstats.py: 77 lines, 3464 bytes, fb7817288dbaffa2
-  t27_window.py: 390 lines, 22533 bytes, 05d965589667b06d
+  t27_window.py: 390 lines, 22549 bytes, 7496be3d3cce3c3c
 PASS: both lines match exactly. FAIL: a number differs -> paste the block again (it overwrites the two files).
 Jarvis check afterwards (read-only): sha256sum ~/speed/scripts/*.py | cut -c1-16
 Undo: rm ~/speed/scripts/j27_logstats.py ~/speed/scripts/t27_window.py  (only with Simon's yes)
-save_finding(topic="speed-27b", finding="27B-1 scripts delivered: j27_logstats fb7817288dbaffa2, t27_window 05d965589667b06d, PASS/FAIL", source="~/speed/scripts")
+save_finding(topic="speed-27b", finding="27B-1 scripts delivered: j27_logstats fb7817288dbaffa2, t27_window 7496be3d3cce3c3c, PASS/FAIL", source="~/speed/scripts")
 ```
 
 ```text
@@ -108,7 +108,7 @@ save_finding(topic="speed-27b", finding="27B-2 baseline <date> CT: decode p50 _ 
 JARVIS STEP 27B-3 of 14: build current llama.cpp with flash attention for V100 (no downtime)
 Goal: a second build at ~/llama.cpp-tp (master 4b1a27f, 2026-09-25, includes the sm_70 FA compile fix) with FA for sm_70. Needed for FA, tensor-parallel and DFlash tests. Production ~/llama.cpp is not touched.
 Preconditions (read-only):
- a) systemctl list-units --type=service --state=active --no-legend --plain | grep -E '^(bench-|mtp-test|il-beside|glm-test|fn-test|t27-|big-verify|build-|dl-)' || echo NONE-ACTIVE   -> NONE-ACTIVE (a build distorts CPU benchmarks)
+ a) systemctl list-units --type=service --state=active --no-legend --plain | grep -E '^(bench-|mtp-test|il-beside|glm-test|fn-test|t27-|big-verify|build-|dl-|kld-|cpu-test)' || echo NONE-ACTIVE   -> NONE-ACTIVE (a build distorts CPU benchmarks)
  b) ls -d /usr/local/cuda*; /usr/local/cuda/bin/nvcc --version | tail -1   -> includes a 12.9 folder, "release 12.9" (if /usr/local/cuda is missing, use the cuda-12.9 path in command 2 instead)
  c) test -e ~/llama.cpp-tp && echo EXISTS || echo FREE   -> FREE
  d) df -h /home | tail -1   -> at least 5G available
@@ -133,8 +133,8 @@ JARVIS STEP 27B-4 of 14: window 1 - control run and CUDA graphs (SIMON ONLY)
 SIMON ONLY - Jarvis must not run this: it stops llama-server (Jarvis) for ~30 min. The script always starts it again at the end, also on errors.
 Goal: measure the exact production config ("ctl") on the test harness, store the speculation-off reference ("ref", run twice to prove the output is repeatable), and test CUDA graphs ("graphs" = ctl without GGML_CUDA_DISABLE_GRAPHS). If step 27B-2 showed no such variable, still run it: graphs then equals ctl and shows run-to-run noise.
 Preconditions (Jarvis may run these read-only checks first):
- a) sha256sum ~/speed/scripts/t27_window.py | cut -c1-16   -> 05d965589667b06d
- b) systemctl list-units --type=service --state=active --no-legend --plain | grep -E '^(bench-|mtp-test|il-beside|glm-test|fn-test|t27-|big-verify|build-|dl-)' || echo NONE-ACTIVE   -> NONE-ACTIVE
+ a) sha256sum ~/speed/scripts/t27_window.py | cut -c1-16   -> 7496be3d3cce3c3c
+ b) systemctl list-units --type=service --state=active --no-legend --plain | grep -E '^(bench-|mtp-test|il-beside|glm-test|fn-test|t27-|big-verify|build-|dl-|kld-|cpu-test)' || echo NONE-ACTIVE   -> NONE-ACTIVE
  c) curl -s -m 5 localhost:8081/health || echo PORT-FREE   -> PORT-FREE
  d) ls ~/.cache/huggingface/hub/models--ggml-org--Qwen3.8-27B-GGUF/snapshots/*/Qwen3.8-27B-Q4_K_M.gguf ~/models/mtp-Qwen3.8-27B-Q4_0.gguf   -> both exist
 Simon runs (one line):

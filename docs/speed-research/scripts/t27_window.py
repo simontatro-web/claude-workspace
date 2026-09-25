@@ -19,7 +19,7 @@ BIN = {"prod": H + "/llama.cpp/build/bin/llama-server", "new": H + "/llama.cpp-t
 MODEL = (sorted(glob.glob(H + "/.cache/huggingface/hub/models--ggml-org--Qwen3.8-27B-GGUF/snapshots/*/Qwen3.8-27B-Q4_K_M.gguf")) or [""])[0]
 MTP, DFLASH = H + "/models/mtp-Qwen3.8-27B-Q4_0.gguf", H + "/speed/models/dflash2-27b.gguf"
 PORT, UNIT, VRAM_LIMIT = 8081, "t27-srv", 15300
-BUSY = re.compile(r"^(bench-.*|mtp-test|il-beside|glm-test.*|fn-test.*|t27-srv|big-verify|build-.*|dl-.*)\.service$")
+BUSY = re.compile(r"^(bench-.*|mtp-test|il-beside|glm-test.*|fn-test.*|t27-srv|big-verify|build-.*|dl-.*|kld-.*|cpu-test)\.service$")
 
 BASE = ["-m", MODEL, "-ngl", "99", "-sm", "layer", "-ts", "28,36", "-ctk", "f16", "-ctv", "f16", "-c", "24576",
         "--jinja", "--chat-template-kwargs", '{"reasoning_effort":"xhigh"}', "--no-mmproj",
