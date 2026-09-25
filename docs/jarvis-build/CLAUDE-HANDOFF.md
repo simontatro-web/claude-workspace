@@ -34,6 +34,9 @@ yourself in this repo; Simon runs everything on the box and pastes you the outpu
   ctxproxy/STRESS-PLAN.md (written by Jarvis: 57 rows + ACCEPTANCE gates; a v2 revision chat may have run).
 
 ## What exists in this repo
+- docs/jarvis-build/MASTER-PLAN.md: READ THIS SECOND. Every want mapped to a step, stages A-H with gates, the
+  definition of DONE, the per-step loop, open decisions, and a status log. Keep its Status column and log current,
+  and only from output Simon pasted.
 - docs/orchestrator-research.md, docs/orchestrator-roadmap.md: the full plan (24 Part-4 wants + 15 new wants
   in docs/orchestrator-wants-simon-2026-09-25.md), decisions D1-D23, buy list. The roadmap may have been edited
   by something else; the file on disk is current.
@@ -64,8 +67,16 @@ Simon has NOT installed the proxy yet. His next steps (README 1-4): scp + checks
 (expect 6/6). He will paste you the output. The two smoke checks that matter most: C3 (our count within 5% of
 llama-server's) and M1 (cache reused after compaction). If C3 under-counts, raise CTXPROXY_OVERHEAD_PCT or
 PER_MSG_TOKENS; if the template rejects the compacted request, change where notes go.
+Checked again 2026-09-25 (MEASURED, Claude's sandbox): the checksum above matches, and a clean extract passes
+51/51 on Python 3.11.15 and 3.12.3. Known gap, fix on the next bundle rebuild: smoke_real.py waits forever if
+127.0.0.1:8113 is already taken (uvicorn's bind error ends its thread; the start loop has no timeout). Until
+then Simon runs a port check first. Run pytest with `-p no:cacheprovider` so ~/jarvis-build gets no
+.pytest_cache. Gate 5 cannot pass before J2b: the 8000 cap makes the xhigh delegate call return nothing.
 
 ## Queue, in order
+Proposed 2026-09-25 and waiting for Simon's OK: MASTER-PLAN.md Stage A reorders items 1-5 below (B1 backup
+alongside the acceptance runs; Builder prompt v2 before them; J2b before gate 5; one regression run at the end).
+Once Simon confirms, follow Stage A there.
 1. Help Simon through ctxproxy README 1-4; fix anything the real server shows; rebuild the bundle if needed.
 2. README 5-6: service install (env file with client key; check container reach to 172.17.0.1:8090),
    Open WebUI connection, Builder base model -> proxy, Task Model -> direct, context_watch filter OFF on Builder.
