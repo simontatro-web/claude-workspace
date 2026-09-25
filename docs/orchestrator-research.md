@@ -112,10 +112,10 @@ Tables (extends the Sep 14 schema that already worked: jobs/deadlines/findings/r
   - `jobs`: id, spec_id (NOT NULL for build/research types), type, status, slot, caps (max wall clock, max tokens, max iterations), parent_job.
   - `steps`: every model call a job makes: model, slot, prompt tokens, output tokens, wall time, outcome.
 - **Visibility**
-  - `events`: an append-only log of everything that happens: "prompt routed to glm53 (reason: hard review, confidence 0.91)", "model load started", "job 12 step 3 failed tests". This one table feeds the control room (N11), the front desk (N8), the daily audit (W20) and the weekly retrospective.
+  - `events`: an append-only log of everything that happens: "prompt routed to glm53 (reason: hard review, confidence 0.91)", "model load started", "job 12 step 3 failed tests". This one table feeds the control room (N12), the front desk (N8), the daily audit (W20) and the weekly retrospective.
 - **Approvals and grounding**
   - `approvals`: pending actions (spec approval, suggestion, email send, model download, promotion to production). Approve or deny from your phone.
-  - `claims`: research and review claims, each with its source, verbatim quote and gate verdict (for N6, N14).
+  - `claims`: research and review claims, each with its source, verbatim quote and gate verdict (for N6, N15).
 - **Models**
   - `models`: every model file, where it lives (NVMe / drive), RAM and VRAM cost, measured speeds, verified hash. The router and the admission controller read this table.
 
@@ -145,15 +145,15 @@ Result: "never queue a build until fully specced and approved by me" is a proper
 
   A refused load becomes an event and a phone message, never a crash.
 
-### 2.5 Grounding gates (N12, N14, W3)
+### 2.5 Grounding gates (N13, N15, W3)
 Every review or answer that claims a fact passes something that is not a language model's opinion:
 - **Code:** tests actually run.
 - **Websites:** a page load in the headed Chrome, console errors, DOM assertions, screenshots.
 - **Research:** a re-fetch of the source plus a string match of the quote.
-- **Groundedness:** a small checker scores every sentence against its source: HHEM-2.1-Open or MiniCheck. The status of both, and whether they are on your drive, is in N14.
+- **Groundedness:** a small checker scores every sentence against its source: HHEM-2.1-Open or MiniCheck. The status of both, and whether they are on your drive, is in N15.
 - **Status answers:** read from the database, never from model memory.
 
-### 2.6 Notifications and approvals from your phone (N12, GAP 2)
+### 2.6 Notifications and approvals from your phone (N13, GAP 2)
 Recommended: self-host **ntfy** on the box, tailnet-only, with `auth-default-access: deny-all`. For instant iOS delivery, set `upstream-base-url: https://ntfy.sh`. Only the message ID and a SHA-256 of the topic URL go to ntfy.sh; message text never leaves your box (SOURCE: [ntfy config docs](https://raw.githubusercontent.com/binwiederhier/ntfy/main/docs/config.md)).
 - **How an approval works:** a notification carries Approve and Deny action buttons. Each button is an HTTP POST from your phone, over Tailscale, to the approvals API. The POST carries a one-time token tied to that approval row, so a leaked topic cannot approve anything.
 - **Known iOS bug:** the ntfy iOS app does not honour `clear: true` for http actions, so an approval notification stays on screen after you tap it (SOURCE: [ntfy issue #1728](https://github.com/binwiederhier/ntfy/issues/1728)). Workaround: the approvals API sends a follow-up "Approved ✓" message. Fallback app: Pushover (one-time $5, VERIFY price).
@@ -204,7 +204,7 @@ Recommended: self-host **ntfy** on the box, tailnet-only, with `auth-default-acc
    - any acceptance test that is not checkable.
 
    You approve, or edit and approve. The approval stores the hash.
-4. **"Does it really understand?": test it, don't trust it.** After you approve, a **fresh** model instance that sees only the spec (not the chat) answers an automatic quiz generated from your interview answers ("what happens when a student gets a question wrong?"). Wrong answers mean the spec document does not carry your vision, and the gap goes back to you before the build starts. This is also exactly your later idea of quizzing the big reviewer model (N12). It matters because every downstream model gets only the spec, never the chat.
+4. **"Does it really understand?": test it, don't trust it.** After you approve, a **fresh** model instance that sees only the spec (not the chat) answers an automatic quiz generated from your interview answers ("what happens when a student gets a question wrong?"). Wrong answers mean the spec document does not carry your vision, and the gap goes back to you before the build starts. This is also exactly your later idea of quizzing the big reviewer model (N13). It matters because every downstream model gets only the spec, never the chat.
 
 **Which model**
 - The 27B (only interactive-speed model; decode speed on the current config is VERIFY).
@@ -264,7 +264,7 @@ create_tool stays, but plugins load into the `jarvis` tool server only. They can
 **How it should work**
 - The job worker (code) prepares the brief: the spec, the acceptance tests, only the files the step needs, and a required output format (a patch, a file, a JSON verdict).
 - It calls the big model through llama-swap in a new request with no history, stores the output as an artifact, runs the tests, and records the step.
-- "Incorporating what they built" is done by the worker plus tests plus the reviewer (N12), and promotion needs your approval. The small model never "pastes it in" unchecked.
+- "Incorporating what they built" is done by the worker plus tests plus the reviewer (N13), and promotion needs your approval. The small model never "pastes it in" unchecked.
 - Prompt caching: every call starts fresh, so cross-call caching barely matters. The one exception is a fixed system prefix for GLM. GLM's dense MLA cache is the low-risk kind for reuse (context-and-speed-per-model). VERIFY with `-lv 4`.
 
 **Which model**
@@ -358,7 +358,7 @@ This makes MiMo a scheduled, approved event (night window, like the benchmark ru
 **Risks**
 - The documented failure from the literature: Darwin Gödel Machine runs **faked test logs and removed detectors**, even with the detectors hidden (Part 4, jarvis-progress). That is why the scorer must be unwritable, not merely hidden (section 2.1).
 - Held-out leakage: if `jarvis` can read the held-out tests, scores become meaningless. They live mode 700 under `jarvis-eval`.
-- **Conflicts with N13 ("never break") by nature.** It is only compatible because promotion needs your approval and the production units are out of its reach.
+- **Conflicts with N14 ("never break") by nature.** It is only compatible because promotion needs your approval and the production units are out of its reach.
 
 ### N6. Deep research all night ("research what hardware I could buy that would improve you")
 
@@ -458,7 +458,50 @@ This makes MiMo a scheduled, approved event (night window, like the benchmark ru
 - Latency: time-to-first-token for a short prompt with reasoning off is **not measured** on the current config (VERIFY). Section 7 has read-only ways to get it from existing logs.
 - Estimate: well under 2 s for a status answer, if reasoning is off. **xhigh reasoning on a status question is the biggest avoidable delay**, because the model thinks before it answers. Turning it off is a per-request setting (`chat_template_kwargs`), not a server change. VERIFY the template honours it per request.
 
-### N9. A voice that talks as fast as a real human (the Iron Man Jarvis)
+### N9. Constantly watch for new models that could run here, even tight, and alert me for fast-house batches
+
+**Have**
+- Jarvis's `hf_model_sizes` tool (every quant's byte size for a list of repos) and `web_search`.
+- The dated watch list and neutral rankings in `model-benchmark-dataset` (Artificial Analysis index v4.3.2, ceiling 53).
+- Months of fit arithmetic in the wiki, and the proven fast-house pull-script workflow.
+
+**How it should work: code decides "can it run", the model writes the digest**
+1. **Poll, don't subscribe.** Hugging Face webhooks need a public URL, and nothing here should be public. Sources, each daily:
+   - the Hugging Face models API for the uploaders that matter (unsloth, ggml-org, bartowski, mradermacher, ubergarm, ISTA-DASLab, kernelpool, and whoever you add), sorted by creation date, GGUF or safetensors only;
+   - llama.cpp and ik_llama.cpp release feeds (`https://github.com/ggml-org/llama.cpp/releases.atom`) and merged PRs mentioning a new architecture;
+   - the Artificial Analysis leaderboard for neutral scores.
+
+   Rate limits on the public Hugging Face API without a token: VERIFY.
+2. **The fit check is arithmetic in code, against the `models` table and measured constants.** Tiers, from easy to "only if everything else is off":
+   - one V100;
+   - both V100s;
+   - one CPU socket (≲230 GiB);
+   - both sockets beside Jarvis (≲ RAM minus Jarvis minus headroom);
+   - whole box with Jarvis off (≲~490 GiB with GPU offload, the MiMo pattern);
+   - streaming experts from disk (llama.cpp PR #25294, unmerged; SOURCE: HANDOFF).
+
+   Checks include:
+   - **Architecture supported** in the production llama.cpp build, a known fork, or not at all (grep the architecture name in upstream source through the GitHub API).
+   - **Volta traps:** no FP8/NVFP4, no BF16 on GPU, CUDA ≤12.9 (what-not-to-do #2, #13).
+   - **Pickle check:** refuse `.bin`/`.pt` pickle checkpoints (Part 4 hard boundary).
+3. **Speed estimate from measured constants, labelled ESTIMATE.**
+   - Formula: decode ≈ effective bandwidth ÷ bytes read per token.
+   - Effective bandwidth: ~37 GB/s interleaved, the GLM-5.3 calibration (MEASURED); ~62% of STREAM on this box.
+   - Prefill is flagged "unknown" until benchmarked. The GLM results show prefill is the real wall, so it cannot be skipped.
+4. **Quality:** use Artificial Analysis if listed, or "vendor-only, unverified" if not. Keep the benchmark traps from model-benchmark-dataset (never compare SWE-bench Verified to Pro, and so on).
+5. **Alerts:**
+   - Immediate phone alert only when a model fits AND beats the model in some slot on a neutral score, or fills a missing slot.
+   - Everything else goes to a weekly digest.
+   - Each candidate becomes a draft line in a "fast-house batch" manifest (repo, files, bytes, why, which slot it would replace, which benchmark decides it). You approve the batch; nothing downloads by itself.
+
+**Which model:** mostly none: this is code. The 27B phrases the digest; an optional GLM-5.3 pass once a week writes a deeper "is this worth a slot" note.
+
+**Risks**
+- Leaderboard drift: benchlm read ±0.5 on the same day.
+- Vendor numbers presented as neutral.
+- The box's architecture support is the real gate: new families often need weeks of unmerged PRs (GLM-5.3-Flash is still fork-only).
+
+### N10. A voice that talks as fast as a real human (the Iron Man Jarvis)
 
 **What "human speed" means:** conversation research puts the typical gap between turns at ~200 ms, with ~500 ms feeling natural and ~800 ms like a thoughtful pause. Production voice agents in 2026 measure ~680 ms median and ~1.2 s p95 (SOURCE: [WebRTC.ventures latency budget, Sep 2026](https://webrtc.ventures/2026/09/voice-ai-latency-budget/) and search summaries). Budget per stage: turn detection 150-300 ms, speech-to-text final 50-100 ms, LLM first token 150-400 ms, text-to-speech first audio 100-200 ms, network 30-80 ms.
 
@@ -490,7 +533,7 @@ This makes MiMo a scheduled, approved event (night window, like the benchmark ru
 - Voice turns share the 27B with the front desk and batch jobs. The reserved slot matters even more here.
 - A microphone on your phone plus network hops: Tailscale on cellular adds 50-150 ms (ESTIMATE).
 
-### N10. Weave Jarvis into your life: check any account, do anything you could do
+### N11. Weave Jarvis into your life: check any account, do anything you could do
 
 **Honest scope first:** "anything I could do" is not possible, and parts of it are not allowed by your own rules:
 - graded schoolwork stays off-limits: read due dates, extract, tutor, check afterwards, drill (Part 4);
@@ -514,3 +557,144 @@ What is realistic is read access to most accounts plus approved actions.
 - **Credentials:** stored only by `jarvis-core` (files mode 600, or systemd-creds). They are used by small "connector" tools that return data. `jarvis` never sees a raw password, so a prompt injection in an email cannot leak it (GAP 3).
 - **Every connector starts read-only.** Actions go through approvals. Trust graduation is per action type (T1: e.g. after N clean approvals you may promote "add calendar event" to automatic, and never "send email").
 - **Email is also an injection surface:** anything read from email or web pages passes the prompt-injection classifier before a tool-holding model sees it (orchestrator-slot-plan; the model is on the drive if pull_orch finished, VERIFY).
+
+### N12. An interactive, cool-looking control room: job progress and what happens behind the scenes ("prompt routed to jarvis_3 (glm 5.3 flash)")
+
+**Have**
+- The W4 design: Claude writes the spec, Jarvis writes the code; one SSE endpoint; a single file; no CDN (jarvis-system-build).
+- The Sep 14 supervisor stamped each response with `_jarvis_route` {label, slot, port, reason}. It is gone now, but the idea carries straight into the `events` table.
+
+**How it should work**
+- **One source of truth: the `events` table (section 2.2).** Every component writes an event when it acts:
+  - the router ("routed to `glm53` because 'hard review', confidence 0.91");
+  - the admission controller ("unloading flashnext to load glm53, ETA 3 min");
+  - the worker ("job 12 step 3 tests 14/15 passed");
+  - approvals and health.
+
+  The UI is a live view of that table (Server-Sent Events) plus a few live readings:
+  - `nvidia-smi` and `free`;
+  - llama-swap's `/running` and its log stream;
+  - llama-server `/slots` and `/metrics`. Production needs `--metrics`, a small unit change for your approval later (SOURCE: [server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)).
+- **Panels:**
+  - jobs (spec, step k/n, ETA, last grounded check);
+  - routing feed;
+  - slots (what's loaded where, RAM/VRAM bars);
+  - approvals (with the phone flow);
+  - health (red when something is ABSENT, GAP 1);
+  - the kill switch.
+- **Slot names:** friendly names (`jarvis_1` = 27B GPU, `jarvis_3` = GLM-5.3-Flash, ...) live in the `models` table, so the feed can say exactly what you wrote.
+- **Access:** the UI is read-only except approvals and the kill switch, which need your credential. It is served on the tailnet only.
+- **Trace drill-down, optional later:**
+  - **Arize Phoenix** runs as one container and is built on OpenTelemetry, but it is Elastic License 2.0 (source-available, not OSI).
+  - **Langfuse** is MIT but needs Postgres + ClickHouse + Redis + S3 to self-host (SOURCE: [Langfuse comparison](https://langfuse.com/faq/all/best-phoenix-arize-alternatives), [morphllm comparison](https://www.morphllm.com/comparisons/arize-phoenix-vs-langfuse)).
+  - Neither is needed for v1. The `events` + `steps` tables already carry the "what went where" story.
+
+**Which model:** the 27B builds it through N2 (spec, sandbox, tests, approval). The reviewer checks it in the headed browser (console clean, DOM assertions, screenshot) before you see it.
+
+### N13. Models reviewing each other until the job is really done; a bigger model that knows 100% what I want reviews, and I approve its suggestions on my phone
+
+**Have**
+- The key finding from GVS5H's code: its "review" is running the solution against tests, not a model's opinion. Ungrounded model-on-model review converges on confident, well-structured wrongness (W3, SOURCE: GVS5H multiagent.py via jarvis-system-build).
+
+**How it should work**
+1. **The loop:**
+   1. The builder produces an artifact.
+   2. **Grounded checks** run: tests; page load + console + DOM + screenshot for websites; re-fetch for research; manifold and wall thickness for prints.
+   3. The **reviewer** gets a fresh context holding only: the approved spec, the acceptance tests, your answers from the interview, your standing preferences (a `preferences` table built from past approvals and denials), the artifact, and the check results.
+   4. The reviewer returns a structured verdict:
+      - `pass`;
+      - `fix_list`: things that violate the approved spec, which go straight back to the builder, no need to bother you;
+      - `suggestions`: changes to the spec or ideas beyond it, which **go to your phone as approve/deny**.
+2. **Stopping rules, in code:**
+   - max iterations (start at 5);
+   - a no-progress detector (the same failing checks twice in a row);
+   - a wall-clock budget;
+   - a "cannot ground this" exit that hands the job to you with what was tried (T4).
+3. **"A model that knows 100% what I want":** its knowledge is exactly the approved spec plus the interview plus your preferences, nothing more.
+   - Before it reviews, run the N1 comprehension quiz against it. If it cannot answer your intent questions, it does not review.
+   - You can quiz it yourself from the control room ("what did I say about mobile?").
+   - 100% is not achievable. "Passed your quiz and the auto-quiz" is achievable and measurable.
+4. **"Models talking to each other"** means structured hand-offs through the database and the job workspace (plan, notes, artifacts, verdicts), not open-ended model-to-model chat. Free chat between models drifts, costs tokens, and leaves no audit trail. The ledger pattern is the one with evidence behind it (GVS5H; Anthropic's verification-subagent note in deep-research-optimization).
+
+**Which model**
+- The reviewer should be a **different family** from the builder, for real diversity (W3): builder Qwen (27B or Flash-Next), reviewer GLM.
+- GLM-5.3 is measured at 1.0-1.5 t/s, so it gives **one final review per build** (~1.5-2.5 h per call, ESTIMATE), not every iteration.
+- In-loop reviews: GLM-5.3-Flash if the fork build works (unmeasured), otherwise Flash-Next (same family as the 27B, so less diversity; the grounded checks carry most of the weight).
+- Website visuals: Qwen3-VL-4B on CPU (on the drive, unmeasured), and the model's opinion never overrides a console error (orchestrator-slot-plan).
+
+**Phone:** section 2.6. Each suggestion is one notification with Approve/Deny. "Deny with reason" and batch review open the approvals page.
+
+### N14. Never break, never kill the server, never touch what keeps Jarvis working ("maybe I can make these behind sudo access")
+
+**Have**
+- Good habits already measured on this box: systemd units with memory caps and OOM priority for experiments; no pkill; backup before editing a unit; test on a spare port.
+- The supervisor rule "only signal PIDs you started" (jarvis-orchestrator).
+- The tool-server output cap.
+
+**Missing** (what the incident log proves prompts cannot do)
+- The fences in section 2.1.
+- An off-box backup.
+- A health watchdog.
+- The kill switch.
+- The bind fix.
+
+**How it should work: the full list, each item a structural guard**
+| Guard | What it stops | Status |
+|---|---|---|
+| Separate `jarvis` user for the shell, no sudo; production units root-owned; polkit allows `jarvis-sandbox-*` only | Jarvis stopping llama-server, Open WebUI, the database, the backups | not built |
+| Tool server bound to `172.17.0.1` (docker0) instead of `0.0.0.0` | anyone on your LAN getting a root-less but unrestricted shell | your decision, pending (HANDOFF) |
+| Also: llama-server (8080) and Open WebUI (3000) listen on all interfaces | LAN users querying the model or the UI without going through Tailscale | VERIFY; your decision |
+| `MemoryMax` on every non-production unit; `OOMScoreAdjust=1000` on experiments; a strongly negative value on production llama-server | a big-model load OOM-killing Jarvis | pattern MEASURED for benchmarks; production value not set (VERIFY) |
+| Admission controller (section 2.4) | two big models plus Jarvis exhausting RAM; a GPU render during a two-card load (15 A circuit, GAP 4) | not built |
+| Nightly restic backup **off-box** (Backblaze B2 now, NAS later); SQLite via `.backup` / `VACUUM INTO`; monthly restore drill | a dead NVMe; a bad edit; a deleted database | not built (W19, #1 on your board) |
+| Git for `~/jarvis-memory`, configs, prompts; `etckeeper` for `/etc`; pre-edit copies (ADD 6) | a bad edit to memory, prompts, units | partial (manual .bak files) |
+| Health watchdog on the *absence* of things (llama-server, Open WebUI, tool server, job API, disk, SMART, backup age) | silent death, like the 20-minute Open WebUI outage nobody noticed | not built (GAP 1) |
+| Kill switch target plus phone action (section 2.7) | a runaway loop while you are away | not built |
+| Per-action rate limits (ADD 3) | job storms, notification floods, portal hammering | not built |
+| Driver and kernel updates held; unattended-upgrades excludes nvidia/cuda (and the kernel, unless DKMS is proven) | an update breaking the V100 stack (driver 580 is the last for Volta) | your decision, pending |
+| Staging: test ports, sandboxes, approval to promote, one-command rollback | a self-build breaking the live system | not built |
+| Model drive in fstab with `nofail`, read-only | a reboot silently dropping the drive (and a boot hang if it is missing) | pending (HANDOFF) |
+
+**"Behind sudo" done right:** Jarvis gets **no** sudo. Wide NOPASSWD sudo is how a jailbroken prompt becomes root. You already have the fence you want in the account boundary itself: you keep sudo, Jarvis cannot use it.
+
+A few read-only diagnostics already have passwordless sudo for `simon` (`nvme smart-log`, `journalctl`, `dmesg`; MEASURED Sep 14 on the old box). Those can move to the watchdog user rather than to `jarvis`.
+
+**Honest limit:** "never" is not reachable against hardware. Single points of failure remain:
+- one NVMe, no RAID;
+- one PSU;
+- a 15 A basement circuit;
+- the USB model drive;
+- the end-of-life Volta driver.
+
+The design makes failures contained (fences), noticed (watchdog), and recoverable (backups, rollback). Jarvis may still break *its own* sandbox or memory; that is acceptable because it is fenced and in git.
+
+**Conflict with your earlier choices, stated plainly:** on Sep 21 you chose an unrestricted shell, and on Sep 22 full memory control. The fences keep both, but inside the `jarvis` user. The one thing that changes: Jarvis can no longer operate on the box *as you*. Some things it did as `simon` (reading `~/bench`, managing your files) will need either read access granted to it or you. That is the decision in section 9.
+
+### N15. Smooth, visible, no glitches, and especially no hallucinations
+
+**Honest bottom line:** zero hallucinations is not achievable with any current model, local or frontier. On AA-Omniscience, which subtracts for confident wrong answers, every local model here scores at or below zero: the 27B −10, Flash-Next −10, GLM-5.3 +14; for comparison Claude Opus 5 +37 (model-benchmark-dataset, SOURCE: AA). What *is* achievable:
+- the system never states facts about itself that aren't in the database;
+- research claims are always cited, checked, and flagged when unsupported;
+- you can see every step.
+
+**Controls, by where hallucinations come from**
+| Source | Control |
+|---|---|
+| Questions about Jarvis itself (status, what ran, what's loaded) | Answer only from the database tools (N8). "I don't have that" when absent. promptfoo trap tests. |
+| World facts in chat | No answers from memory for facts that matter: retrieval with citation, or "unverified" marked. |
+| Research and review claims | A verbatim quote per claim; groundedness checker; re-fetch sample; numbers never paraphrased (N6). |
+| Tool output cut off | Already fixed: the tool server returns head+tail with an explicit TRUNCATED marker (MEASURED, jarvis-run-host-commands). |
+| Context overflow, silently losing history | 4 silent truncations in 48 h (MEASURED). Keep jobs out of chat; ctxwatch alerts; long work lives in the database; reasoning off for short roles. |
+| Fake tool calls when Open WebUI function calling is "Default" | The jarvis model row now has native function calling (MEASURED, Part 5). Keep it in the promptfoo suite so a regression shows up. |
+| Model restating a number | Numbers are copied, and derived numbers are computed by code (research spec rule). |
+
+**Groundedness checkers found**
+- **HHEM-2.1-Open** (Vectara's cross-encoder, ~0.44 GB, CPU, needs `trust_remote_code`): the pick recorded in orchestrator-slot-plan.
+- **MiniCheck:** the 770M FT5 version reaches GPT-4-level accuracy on the LLM-AggreFact benchmark in its paper, and a stronger Bespoke-MiniCheck-7B exists (SOURCE: [github.com/Liyan06/MiniCheck](https://github.com/Liyan06/MiniCheck), [arXiv 2404.10774](https://arxiv.org/abs/2404.10774)).
+- Measure the chosen checker's false-pass rate on **RAGTruth** (queued in pull_research, VERIFY on the drive) before relying on it.
+- The generative phi3.5 hallucination judge on the drive is a second opinion that explains, never the gate.
+
+**"Smooth" and "no glitches"**
+- The health watchdog (alerts on absence), the control room (visibility), and the kill switch.
+- Regression suites run before any prompt, flag or model change (ADD 2).
+- The glitch that bites most today is context truncation. It is solved by moving work out of the chat, not by a bigger window, which the GPUs can't hold (HANDOFF).
