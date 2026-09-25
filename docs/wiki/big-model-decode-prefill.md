@@ -1,0 +1,73 @@
+# big-model-decode-prefill
+
+> Copied verbatim from Cowork (melange-wiki) on Sep 25 2026 (page last updated Sep 23, 2026).
+> Cowork-only links kept as page names.
+>
+> Summary: Sep 23 2026 source-verified additions to big-model decode and prefill tuning on jarvis-1 — the -ncmoe partial-offload dial nobody knew about, why BLAS probably will not help, the llamafile/tinyBLAS default, and why batching is the one lever that beats bandwidth on a CPU MoE. Read with [[cpu-moe-speed-levers]], which is at its size cap.
+
+Extends cpu-moe-speed-levers (at size cap) and cpu-moe-hardware-anchors. Everything with a line number below was read by me directly from llama.cpp master source on Sep 23 2026.
+
+## *** FINDING 1: -ncmoe / --n-cpu-moe N — A PARTIAL-OFFLOAD DIAL. EVERY FILE IN THIS MEMORY RECOMMENDS THE ALL-OR-NOTHING VERSION INSTEAD. ***
+
+common/arg.cpp defines four related flags, not one: | flag | what it does, verbatim from the source | | -ot, --override-tensor | "override tensor buffer type" — the regex approach recorded everywhere in this memory | | -cmoe, --cpu-moe | "keep all Mixture of Experts (MoE) weights in the CPU" — a one-word equivalent of -ot "ffn_.*_exps.*=CPU" | | *** -ncmoe, --n-cpu-moe N *** | *** "keep the Mixture of Experts (MoE) weights of the FIRST N LAYERS in the CPU" *** | | -ncffn, --n-cpu-ffn N | "keep the dense FFN weights of the first N layers in the CPU (dense models; for MoE expert weights use --n-cpu-moe)" | Also: -ngl now accepts auto (the default) or all, not just a number. *** WHY THIS MATTERS: -ot "ffn_.*_exps.*=CPU" and -cmoe force ALL expert layers onto CPU RAM. -ncmoe N leaves the first N layers' experts on CPU and puts THE REST ON THE GPU. It is a tunable dial where the memory has only ever recorded the on/off switch. *** THE ARITHMETIC FOR GLM-5.3 FULL (78 layers, 435 GiB at UD-Q4_K_XL, ~24.8 GB read per token): routed experts are the overwhelming majority of a 753B/40B MoE, so expert weights are roughly 5-5.5 GiB per layer. With the 27B stopped, ~31.5 GiB of VRAM exists, and after KV and compute buffers perhaps ~20-25 GiB is spendable on experts. That is about 4 layers of 78, i.e. ~5% of expert bytes moved from 39 GB/s RAM to 900 GB/s HBM. Call it a ~5% decode gain — modest, free, and it STACKS on top of the ~1.3x already credited to moving attention and shared tensors to GPU. SO THE RIGHT COMMAND IS NOT -cmoe. It is -ngl 99 -ncmoe <78 minus however many layers fit>, tuned upward until VRAM is full. Start conservative, read the VRAM figure llama-server prints, and walk N down one layer at a time.
+
+## *** FINDING 2: BLAS IS A PREFILL-ONLY LEVER, AND IT PROBABLY WILL NOT HELP HIM. I CHECKED THE REASON. ***
+
+llama.cpp's own docs/build.md, verbatim: "Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Using BLAS doesn't affect the generation performance." Options are OpenBLAS, BLIS and Intel oneMKL (-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=...). Prefill is Jack's binding constraint, so this looked promising. It probably is not, and here is why:
+
+- ggml/CMakeLists.txt:197 gates the llamafile/tinyBLAS sgemm path on GGML_LLAMAFILE, whose default is OFF at the ggml level (:113-114) — BUT the top-level CMakeLists.txt:165-166 sets GGML_LLAMAFILE_DEFAULT ON for a normal llama.cpp build. So tinyBLAS is already ON in any standard build, and it is precisely the tuned CPU GEMM that made external BLAS libraries largely redundant. The docs' hedged "may lead to some performance improvements" is aimed at builds without it.
+- The oneMKL note claims it "will make avx_vnni available for Intel processors that do not support avx512" — AVX-VNNI is Alder Lake and later. Haswell has neither. That specific benefit does not apply to jarvis-1 at all. ACTION: verify rather than rebuild. grep GGML_LLAMAFILE ~/llama.cpp/build/CMakeCache.txt — if it reads ON, the fast GEMM path is already in use and BLAS is very unlikely to add anything. Given this memory has already burned one false alarm on misreading CMake cache values (the GGML_AVX2=OFF scare in system-performance-levers), confirm before acting either way. ALSO CONFIRMED FROM SOURCE: GGML_OPENMP defaults ON (ggml/CMakeLists.txt:247), and GGML_CPU_ALL_VARIANTS defaults OFF. Nothing to fix there.
+
+## *** FINDING 3: THE ONE LEVER THAT GENUINELY BEATS THE BANDWIDTH WALL ON A CPU MoE IS BATCHING — AND IT FITS HIS ACTUAL WORKLOAD. ***
+
+cpu-moe-speed-levers states the governing law correctly: decode t/s = effective bandwidth ÷ bytes read per token, and lists only three escapes (raise bandwidth, cut bytes/token, emit more than one token per pass). *** There is a fourth, and it is the one his overnight batch workload is shaped for: SERVE SEVERAL SEQUENCES AT ONCE. *** The mechanism: at batch size B the expert weights are read once per unique expert activated across the whole batch, not once per sequence. Aggregate throughput therefore rises far faster than the bytes read. The same file already records the supporting measurement from the speculative-decoding research: expert routing has strong temporal correlation, so the union of activated experts grows SUB-linearly — Cohere measured that at K=3 a model loads only ~2.5x the experts of a single token rather than the naive 3.2-3.6x. The identical logic applies across concurrent sequences. That same file also notes the non-obvious part: "MoE shows a NON-MONOTONIC speedup curve (sparsity keeps it bandwidth-bound at higher batch sizes, creating a sweet spot), unlike dense models which decline monotonically." So there is a batch size that is best and it must be found by sweeping, not assumed. PRACTICAL CONSEQUENCE, and it changes how the big models should be USED rather than configured: a single interactive chat with GLM-5.3 at ~1.6-4 t/s is painful and always will be. Four concurrent research subagents against the same GLM-5.3 slot do NOT cost 4x the time — they share the expert reads. This is the same continuous-batching finding recorded in system-performance-levers (measured ~15x aggregate at high concurrency on a 3090), and it is why deep-research-optimization's parallel-subagent design does not multiply wall clock the way its 3-10x token cost implies. *** THE RULE THAT FOLLOWS: NEVER USE A BIG MODEL INTERACTIVELY, ONE REQUEST AT A TIME. QUEUE WORK AND RUN IT CONCURRENTLY ACROSS llama-server SLOTS. That converts the worst property of these models (bandwidth-bound single-stream decode) into their best one (they are nearly free to parallelise). *** Sweep to find the sweet spot: run the same job at --parallel 1, 2, 4, 8 and compare aggregate tokens/second, not per-request latency, which will get worse by design.
+
+## PREFILL: WHAT IS ALREADY COVERED, AND THE ONE UNTESTED IDEA
+
+Already on file and not repeated here: -b 4096 -ub 4096 (~2x, free, prefill-only); ik_llama.cpp measured 5.05 vs 2.70 t/s prompt processing on comparable AVX2 dual-Xeon hardware (~1.87x); GPU-assisted prefill is Ampere+ only so the V100s cannot help; the CPU upgrade to E5-2699 v4 is worth roughly +20% prefill (22 cores at 1.80 GHz AVX vs 18 at 1.90, plus ~5% Broadwell IPC) per system-performance-levers and power-thermals-and-tuning. STILL THE ONE GENUINELY UNTESTED PREFILL IDEA: hyperthreading for prompt processing only. Prefill is GEMM-bound rather than bandwidth-bound, which is the regime where SMT usually helps, and -tb/--threads-batch exists precisely to set it independently of decode threads. No published benchmark isolates this. Sweep -tb from 36 to 72 with -t 36 fixed and read only the pp512 column. Full framing in power-thermals-and-tuning.
+
+## CLOSING AN OPEN ITEM FROM cpu-moe-speed-levers
+
+That file flags as UNVERIFIED "whether -rtr supports Unsloth's mixed-type UD quants". model-pull-and-flags already answered it: ik_llama.cpp's own guide names unsloth/DeepSeek-R1-UD-Q2_K_XL explicitly, so UD quants are supported — with the caveat recorded there that it "works on 68a5b604 but regression after that, see GH ISSUE #271", and the two hard limits that -rtr disables mmap (needs RAM for the whole repacked model) and that _R4 repacked quants will not run on CUDA at all.
+
+## *** Sep 23 2026 — MTP FOR GLM-5.3 IS REAL AND MAINLINE. THIS OVERTURNS "MTP NOT WIRED" IN context-and-speed-per-model AND cpu-moe-speed-levers. ***
+
+Jack asked "are you sure there's no way to get MTP for GLM-5.3 Flash or full?" He was right to push. The stored answer was stale. Read directly from llama.cpp master source Sep 23 2026.
+
+### GLM-5.3 FULL (LLM_ARCH_GLM_DSA) — MTP IS FULLY WIRED IN MAINLINE, NOT "PRESERVED BUT UNUSED"
+
+- src/models/glm-dsa.cpp:532 carries the comment "LLM_GRAPH_TYPE_DECODER_MTP draft head for GLM-5.2 (GLM_DSA)" and :190-191 returns std::make_unique\<graph_mtp>(*this, params) when params.gtype == LLM_GRAPH_TYPE_DECODER_MTP. The graph exists.
+- src/llama-model.cpp:2319-2345, under case LLM_ARCH_GLM_DSA:, allocates a dedicated MTP KV context: "The NextN/MTP draft head runs dense MLA (no DSA indexer), so the MTP context uses a plain attention KV cache holding only the nextn layer(s) - same pattern as the hybrid Qwen3.5 MTP context."
+- src/llama-arch.cpp:580-587 defines all eight NextN tensors (blk.%d.nextn.eh_proj, enorm, hnorm, embed_tokens, shared_head_head, shared_head_norm, plus nextn.pre_projection/post_projection). THE OLD "PRESERVED BUT UNUSED" CLAIM (llama.cpp discussion #25175) IS ABOUT LLM_ARCH_GLM4_MOE, A DIFFERENT ARCHITECTURE. Do not apply it to GLM-5.3 full, which is glm-dsa.
+
+### *** THE ONE THING THAT DECIDES IT: DOES THE UNSLOTH GGUF CARRY THE NEXTN BLOCK? ***
+
+glm-dsa.cpp:78-89 handles three cases explicitly and names the exact probe tensor:
+
+cpp
+
+const bool mtp_only   = (hparams.n_layer_nextn > 0) && (ml.get_weight("blk.0.attn_norm.weight") == nullptr);
+
+const std::string mtp_probe = "blk." + std::to_string(n_layer) + ".nextn.eh_proj.weight";
+
+const bool trunk_only = (hparams.n_layer_nextn > 0) && (ml.get_weight(mtp_probe.c_str()) == nullptr);
+
+if (!ml.load_mtp) { mtp_flags |= TENSOR_SKIP; }
+
+GLM-5.3 full has 78 layers, so the tensor to look for is blk.78.nextn.eh_proj.weight. Present = MTP head shipped in the GGUF. Absent = trunk_only, and the trunk still loads cleanly (tensors marked NOT_REQUIRED) but there is no draft head. CHECK THIS ON ARRIVAL with llama-gguf / gguf_dump and grep for nextn. It is a 10-second check that decides a ~1.4x. Note mtp_only also exists: a user-split target/draft pair is supported, so a separately-published MTP GGUF works if Unsloth stripped it from the main file.
+
+### THE FLAGS (from common/arg.cpp master)
+
+| flag | line | meaning, verbatim | | --mtp | 3080-3083 | "also download the multi-token prediction (MTP) head, if available (default: unused)" — pushes COMMON_SPECULATIVE_TYPE_DRAFT_MTP | | --spec-type draft-mtp | 4245 | selects the MTP speculator explicitly | | --spec-draft-n-max N | 4136 | draft depth. The REMOVED aliases are exactly {"--draft", "--draft-n", "--draft-max"} (arg.cpp:4383); :4384 errors with "the argument has been removed. use --spec-draft-n-max or --spec-ngram-mod-n-max". There was never a --draft-n-max flag — do not write that; --draft-n-min DOES exist as an alias of --draft-min (:4389), which is the easy confusion. | | --dflash | 3085-3090 | "also download the DFlash sidecar, if available (default: unused)" — pushes COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH. This is MiMo's speculator, distinct from --mtp. |
+
+BLIND VERIFICATION Sep 23 2026: 93%. 12 of 14 claims exact (every line number, every verbatim comment and help string, both benchmark figures, the GLM4_MOE-vs-GLM_DSA distinction, and the arithmetic all confirmed against primary sources). Two defects, both cosmetic and neither plan-changing: the invented --draft-n-max alias (fixed above) and a "contains exactly three files" overstatement about the kernelpool repo (it also has .gitattributes and README.md). Below Jack's 95% bar on a technicality; no conclusion in this section changed. arg.cpp:537-583 also auto-discovers a sidecar MTP head at download time and sets params.speculative.draft.mparams.path — but only when no draft path was set explicitly.
+
+### GLM-5.3-FLASH (glm5next) — MTP EXISTS TOO, ON A FORK, WITH A REAL CPU NUMBER
+
+ik_llama.cpp PR #2399 (rafiksalama), "glm5next: complete MTP (NextN) self-speculative decoding support." Adds build_glm5next_mtp() (~135 lines: eh_proj input fusion → MLA+DSA attention with k-pool indexer → sigmoid-gated MoE + shared expert), architecture allowlist, quantizer compat checks, zero-slot MTP subgraph constructor fixes, MLA k-only KV guard. *** MEASURED ON CPU, WHICH IS EXACTLY JACK'S CASE: 24-thread EPYC 9224, Q4_K_M, 9.2 → 13.2 t/s = 1.43x, 67% draft acceptance, n_max=4, --spec-type mtp. *** This is the first CPU-measured MTP number on file for any big model — everything else was GPU. STATUS: OPEN, blocked on PR #2376 (base glm5next support) merging first; owner said they would merge #2376 after vacation. So Flash needs a two-PR stack, not one. ALSO: turbo-tan/llama.cpp-tq3 PR #82 MERGED Sep 17 2026 (commit 32cf4cb) — "glm5next architecture support (GLM-5.3 / GLM-5.3-Flash, 312B-A17B MoE)" plus an MTP draft-cache fix: under env var LLAMA_MTP_PROCESS_ONLY it skips copying target KV into the draft context between spec steps, curing rc=-1 task cancels and silent generation errors. Measured GB10 GPU, TQ3_4S 101.7 GiB: 11.3 t/s sustained with MTP dn=2, 88-95% draft acceptance. A third-party fork, but a MERGED one with a named cache bug and its fix. COUNTER-EVIDENCE, keep it honest: mazurov.dev benchmarked native MTP vs DFlash on GLM-5.3-Flash under SGLang on 2x GB10 and found native MTP ~20% SLOWER on short prompts (25.75 vs 32.35 tok/s on code), framing MTP as a capacity trade — ~16-20% throughput for an 89% larger KV pool. Different engine, different hardware, GPU only. Does not transfer to llama.cpp CPU, but it means "MTP always wins" is wrong.
+
+### REVISED VERDICT
+
+- GLM-5.3 full: MTP is available TODAY on mainline, no fork. Contingent only on the GGUF carrying blk.78.nextn.eh_proj.weight. If present, apply ~1.3-1.6x to the stacked 2.5-4 t/s → ~3.3-6 t/s.
+- GLM-5.3-Flash: MTP exists but costs a fork and a PR stack. With the measured 1.43x on its 5-7 t/s mirrored estimate → ~7-10 t/s.
+- Neither changes the ranking: Flash-Next still wins, because it has 6B active params and ships MTP draft GGUFs in-repo with no patching at all. Sources: llama.cpp master src/models/glm-dsa.cpp, src/llama-model.cpp, src/llama-arch.cpp, common/arg.cpp (all read directly); ikawrakow/ik_llama.cpp PR #2399 and #2376; turbo-tan/llama.cpp-tq3 PR #82; ggml-org/llama.cpp discussion #25175; mazurov.dev/posts/glm-speculation-benchmark.
