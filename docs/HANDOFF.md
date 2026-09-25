@@ -58,3 +58,13 @@ If your session is on another branch: `git fetch origin claude/new-session-uyo1y
 - Never do Simon's graded schoolwork (his own rule).
 - Keep files meant for Jarvis in plain ASCII-friendly text; deliver them by terminal heredoc, not through Jarvis's write_file.
 - Commit and push to `claude/new-session-uyo1y3`. No model identifiers in commits or files.
+
+## Update 2026-09-25 ~05:45 UTC (later in the same session)
+- GLM-5.3 UD-Q4_K_XL copied to /home/simon/models/GLM-5.3 on the 990 PRO (468 GB) and VERIFIED against HF sha256 (12 files, glm-verify, 05:39Z). MTP head present (blk.78.nextn.* in shard 11).
+- The full-drive verify run was stopped partway (only GLM-5.3 and the earlier cached files are hashed). Re-run ~/model-verify/verify.py later for the rest; it resumes from its cache.
+- llama.cpp build f4e276a20 (2026-09-21): --no-mmap is GONE, use -lm/--load-mode (auto|none|mmap|mlock|mmap+mlock|dio). No --mtp flag; MTP is --spec-type draft-mtp. llama-bench has -d, -lm, -ncmoe, -fitt, jsonl; no --threads-batch, no spec decoding, no --parallel.
+- Simon's first order of business: benchmark EVERY model fully (speed, max context, best config, community forks) before assigning orchestrator slots. Plan: docs/benchmark-campaign.md; GLM matrix: docs/glm-5.3-test-plan.md.
+- Bench tooling on the box, sources in docs/bench/: ~/bench/bench.sh (one-off runs), ~/bench/queue-runner.sh (overnight queue; stops Jarvis only 1-7 AM America/Chicago, max 300 min, always restarts him), ~/bench/queue.txt, ~/bench/summary.py, ~/bench/report.sh (one paste-able report).
+- NIGHT 1 STARTED 05:40Z: 11 GLM-5.3 jobs (threads, batch, fa, K cache, depth, poll; Jarvis-off: interleave, SMT prefill, GPU hybrid -cmoe / -ncmoe 76 / 74). Next step: Simon pastes ~/bench/report.sh glm output in the morning; pick best settings, build night 2 (server-mode tests: MTP, parallel, prompt cache, needle/max ctx; THP; remaining K cache types; then Flash-Next family).
+- ~/glm-test.sh exists (llama-server test unit on :8082, now -lm dio, NVMe path) for the server-mode tests later. ~/flashnext-test.sh was offered but may not be saved.
+- Still pending from earlier: Jackrong fix + Part 5 delivery to ~/jarvis-memory (never confirmed), HF token revoke, driver hold, backup decision, drive's BUILD-QUEUE/RESEARCH-SPEC/JARVIS-BRIEFING/MANIFEST not yet read in full. Simon wants an always-on Jarvis worker loop later (after benchmarking).
