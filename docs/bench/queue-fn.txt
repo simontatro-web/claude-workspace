@@ -1,0 +1,15 @@
+# Qwen3.8-Flash-Next UD-Q4_K_XL, day 1. Format: <label> <profile> <max-hours> <llama-bench args...>
+# cpu1 = socket 1 only (18 cores / 36 threads, its own RAM), beside Jarvis. cpuil = both sockets, Jarvis off (1-7 AM Central only).
+# Risky settings are in their own jobs: llama-bench stops at the first failure and loses the rest of that job.
+fn-a0-baseline cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -p 512 -n 128 -r 3
+fn-a1-threads cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 9,12,16,18,36 -p 512 -n 128 -r 2
+fn-a2-batch cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -p 4096 -n 0 -b 4096 -ub 512,1024,2048,4096 -r 2
+fn-a2b-smt-prefill cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18,36 -p 4096 -n 0 -b 4096 -ub 2048 -r 2
+fn-a3-fa cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -fa on,off -p 512 -n 128 -d 0,8192 -r 1
+fn-a5-kq8 cpu1 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -fa on -ctk q8_0 -ctv q8_0 -p 512 -n 128 -d 0,8192 -r 1
+fn-a6-depth32 cpu1 3 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -p 512 -n 128 -d 0,16384,32768 -r 1
+fn-a6-depth64 cpu1 4 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -p 512 -n 128 -d 65536 -r 1
+fn-a7-poll cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 --poll 0,50,100 -p 512 -n 128 -r 2
+fn-b1-interleave cpuil 2 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 36 -p 512,4096 -n 128 -d 0,16384 -r 1
+fn-b1-threads-il cpuil 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 36,72 -p 4096 -n 128 -r 1
+fn-a0-baseline-end cpu1 1 -m /home/simon/models/Qwen3.8-Flash-Next-unsloth/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf -lm dio -lzm off -ngl 0 -t 18 -p 512 -n 128 -r 3
