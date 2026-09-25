@@ -73,6 +73,16 @@ Results: ~/bench/results/fn-mtp/20260925-213943/
 Prefill unchanged by MTP (~25 t/s). Best: n-max 3 (1.57x mean, 1.78x on reasoning); n-max 4 is worse. shared-Q4 ~= shared-Q8 at n2 (smaller, same speed): try shared-Q4 at n-max 3 next.
 Output check (MEASURED): all 6 MTP configs produce IDENTICAL text to EACH OTHER on all 3 prompts (every pair), and all differ from MTP off at the same near-tie token. So MTP output is deterministic and independent of n-max and head; the difference is a systematic numeric-path difference between the MTP server path and plain decode, not the PR's n-max >= 3 bug. Remaining checks before adopting: MTP-off run twice (run-to-run identity) and equal scores on the quality suite.
 
+### Both sockets (numactl --interleave=all) WITH Jarvis running (il-beside) - MEASURED 2026-09-25 5:22-5:35 PM CT
+Results: ~/bench/results/fn-il-beside/20260925-222222/
+| threads | 12 | 18 | 24 | 36 |
+|---|---|---|---|---|
+| prefill pp512 | 23.06 | 30.89 | 39.30 | **50.66** |
+| decode tg128 | 5.51 | **5.60** | 5.23 | 5.03 |
+vs socket 1 alone (best 4.38 decode at 9 threads, 31.67 prefill at 36): decode +28%, prefill +60%. Decode gains less than STREAM's 2x because half of every read crosses QPI; a NUMA-mirror fork is the fix for that (ESTIMATE up to ~2x socket 1).
+Jarvis during the run (probe: planets question, 200 tokens, temp 0): median before 57.43 t/s, during 55.53 (-3%), lowest single probe 48.70 (-15%), after 57.88. Never hit the 75% stop line. So spreading Flash-Next over both sockets beside Jarvis costs Jarvis ~3% typical, ~15% worst probe.
+Best stock config so far: numactl --interleave=all, -t 18 (decode) -tb 36 (prefill), -ub 512: ~5.6 t/s decode, ~50 t/s prefill, beside Jarvis. With MTP n-max 3 on top: ~8.8 t/s ESTIMATE (5.6 x 1.57, not yet measured together).
+
 Best single-socket stock config so far (before MTP): -t 9-12 (decode) -tb 36 (prefill), -ub 512, -fa on, K/V q8_0 optional.
 
 ## Commands kept for later
