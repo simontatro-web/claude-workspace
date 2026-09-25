@@ -52,3 +52,45 @@ Labels: MEASURED (on this box), SOURCE (read in llama.cpp code or docs by an ear
 
 ## Order
 1a now (read-only on the drive), then 1b-1c on first load, then 1d-1g with llama-bench, then 1h-1i. Only then decide on a phase 2 window.
+
+## FULL MATRIX (added 2026-09-25 after Simon asked to try absolutely everything, including community work)
+Status key: TODO, RUNNING, DONE, RULED OUT (with the reason). Every item is run as a separate change against the best-so-far baseline, with the numbers saved.
+
+### A. Stock llama.cpp, CPU only (runs beside Jarvis)
+- A1 threads 32/36 (decode); 18 (one socket) as a control
+- A2 prompt batch -b/-ub 512/1024/2048/4096
+- A3 flash attention auto/on/off
+- A4 load mode dio vs none vs mmap (speed after load should match; load time differs)
+- A5 K cache f16/q8_0/q4_0/q4_1/iq4_nl/q5_0/q5_1 at depth 0 and 16K (MLA has no V cache)
+- A6 depth curve 0/4K/16K/32K/64K with the best flags (the long-context cost)
+- A7 --poll 0/50/100, --cpu-strict, --prio (thread scheduling knobs)
+- A8 NUMA: --preferred=1 vs --numa distribute vs --numa numactl
+- A9 transparent huge pages set to "always" for the run (anonymous memory with dio/none can use them; THP is currently madvise)
+- A10 concurrency with llama-batched-bench / llama-server --parallel 1/2/4/8 (aggregate t/s)
+- A11 MTP (head present): --spec-type draft-mtp, --spec-draft-n-max 1-5, --spec-draft-p-min 0/0.4, on reasoning and copy-heavy prompts
+- A12 prompt cache: --cache-reuse 256, -lv 4, second-turn timing; --slot-save-path save/restore of a long context
+- A13 max context proof: needle test at the largest -c that fits, truncated = 0
+
+### B. Needs Jarvis stopped (downtime windows)
+- B1 numactl --interleave=all (MEASURED 2x STREAM bandwidth vs one socket on this box)
+- B2 GPU hybrid: -ngl 99 -cmoe, then -ncmoe N walked down until VRAM is full; also -ot patterns (attention + shared experts on GPU)
+- B3 KV cache on GPU vs CPU (-nkvo 0/1) in hybrid mode
+- B4 hot-expert VRAM caching: llama.cpp PR #27861 (GPU LRU cache for offloaded experts), JigSawPT/moe-autopilot (measured +26-31% on other MoEs), discussion #24528 approach
+- B5 MTP in hybrid mode
+
+### C. Other engines and community forks (separate build trees; production binary untouched)
+- C1 ik_llama.cpp (GLM-5 supported, with MTP): -rtr run-time repack, -fmoe fused MoE, -mla modes, -amb attention buffer, --split-mode graph, --merge-qkv, -gr/-ger, --k-cache-hadamard, -tb 72 prefill threads; benchmark with its llama-sweep-bench
+- C2 DSA sparse attention (the model's real long-context mode): llama.cpp PR #21149 / discussion #21183 (DeepSeek V3.2 indexer, check whether it covers glm-dsa), fairydreaming deepseek-dsa branch (POC, reported "horribly slow" on CPU), ubergarm GLM-5.1 draft DSA PR
+- C3 KTransformers: AVX2-only CPU backend exists since Mar 2026 and GLM-5.3-Flash support since Aug 2026. VERIFY GLM-5.3 full support and whether its GPU kernels run on Volta (sm_70)
+- C4 NUMA-aware forks: mikechambers84/llama.cpp-ng (topology support), PrismML PR #251 (moves repacked rows to the reading node)
+- C5 TurboQuant KV (CPU implementations exist; tbq3/tbq4 naming UNCONFIRMED)
+
+### D. Needs downloads (lossy or different files; Simon's call, 4.1 MB/s at home)
+- D1 other quants: UD-Q2_K_XL 254 GB (fits one socket), UD-IQ3_XXS 282 GB, UD-Q3_K_XL 343 GB, UD-Q5_K_XL 563 GB (does not fit RAM). Quality numbers per quant are in glm-5.3-quant-quality.
+- D2 ik_llama-specific quants (IQ4_KS etc., e.g. ubergarm GLM-5.x GGUFs) that repack better on CPU
+- D3 REAP expert-pruned GLM-5.3 (community, quality claims unverified)
+
+### RULED OUT, with reasons (recheck if hardware changes)
+- NUMA mirroring at Q4 (llama.cpp PR #27986, ik_llama PR #2396): needs 2 x 435 GiB = 870 GiB, box has 503 GiB. Possible only with a quant under ~230 GiB (D1 Q2_K_XL is the only candidate) or 1 TB RAM.
+- Streaming experts from disk (llama.cpp PR #25294): only useful when the model does not fit in RAM; GLM-5.3 Q4 fits. Keep for MiMo.
+- vLLM / SGLang CPU backends: VERIFY, but their CPU paths target AVX-512/AMX; this CPU is Haswell AVX2.
