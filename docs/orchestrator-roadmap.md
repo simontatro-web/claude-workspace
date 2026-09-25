@@ -80,6 +80,9 @@ Labels as in the research doc. Effort per step: ESTIMATE.
 ### 1.4 Freeze and reboot-proof (D4, D17). No downtime.
 - **Build**
   - Hold the NVIDIA driver packages and blacklist them in unattended-upgrades. The kernel can keep updating: DKMS rebuilt the driver for 6.8.0-142 (MEASURED V12).
+  - **The exact hold list (MEASURED V27):** the 17 packages `apt list --upgradable` shows from NVIDIA's repo (list in research doc 1a, V27). Test: `apt-mark showhold` lists all 17, and `apt list --upgradable` still lists them while `apt-get -s upgrade` (a simulation) shows them kept back. Undo: `apt-mark unhold` on the same list.
+  - CUDA needs no hold today: only versioned 12-9 packages are installed (V27).
+  - **Until then: nobody runs `apt upgrade` on jarvis-1.**
   - Keep unattended security updates for everything else.
   - An fstab entry for the model drive: read-only, `nofail`, by UUID, ntfs3.
 - **Test:** `apt-mark showhold` lists the held packages. After the next planned reboot: the drive is mounted read-only and llama-server comes up (the Sep 23 boot bug was fixed; re-confirm).

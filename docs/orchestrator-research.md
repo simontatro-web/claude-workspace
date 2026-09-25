@@ -188,6 +188,12 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
   - **The prompt-injection DeBERTa is complete:** a 737,719,272 B safetensors plus an ONNX export.
   - Its folder also holds `training_args.bin`, a pickle file. It is not needed for inference; never load it (Part 4: no pickle files).
 
+- **V27, exact upgrade exposure (MEASURED):**
+  - **17 NVIDIA packages are upgradable right now** from NVIDIA's repo, all the same driver version (580.178.04) in NVIDIA's packaging (`-1ubuntu1` replacing Ubuntu's `-0ubuntu0.24.04.1`): nvidia-driver-580, nvidia-dkms-580, nvidia-kernel-common-580, nvidia-kernel-source-580, nvidia-compute-utils-580, nvidia-utils-580, libnvidia-cfg1-580, libnvidia-common-580, libnvidia-compute-580, libnvidia-decode-580, libnvidia-encode-580, libnvidia-extra-580, libnvidia-fbc1-580, libnvidia-gl-580, xserver-xorg-video-nvidia-580, plus libnvidia-egl-wayland1 and nvidia-settings. The nvidia-settings upgrade is 510.47 → 615.71; version 615 shows NVIDIA's repo already carries a newer driver branch.
+  - A plain `apt upgrade` would swap the driver's packaging and rebuild the kernel module. The version is the same, so it would *probably* still work, but it is an unplanned change to the one component that can't be replaced for Volta.
+  - **CUDA is safe from silent jumps:** only versioned `cuda-*-12-9` packages are installed, plus `cuda-keyring`. There is no unversioned `cuda` or `cuda-toolkit` metapackage, so an upgrade will not pull CUDA 13 (MEASURED).
+  - **`/usr/sbin/lxc` is not owned by any package** (`dpkg -S` found nothing). Origin unknown: VERIFY V28. Still do not run it.
+
 ### Remaining follow-up checks
 | # | Settles | Command |
 |---|---|---|
@@ -195,7 +201,8 @@ Wikipedia (maxi 2026-08 at 127 GB, and nopic 2026-06), Stack Overflow plus ~25 S
 | V24 | Is `lxd` membership a live root path | `snap list 2>/dev/null \| grep -i lxd; ls -l /var/snap/lxd/common/lxd/unix.socket 2>&1; command -v lxc` |
 | V25 | Where the NVIDIA driver packages come from | `dpkg -l \| grep -E '^ii +(nvidia-driver\|nvidia-dkms\|libnvidia-compute)' \| head; apt-cache policy nvidia-driver-580 2>/dev/null \| head -12` |
 | ~~V26~~ | done: PMC/PubMed presence; ZIM integrity; model folders complete | `ls -la /mnt/models/models/corpus/refs /mnt/models/models/corpus/ted /mnt/models/models/data/research 2>&1 \| head -60; ls -la /mnt/models/models/verify/HHEM-2.1-open /mnt/models/models/verify/prompt-injection-deberta 2>&1 \| head -40` |
-| V27 | Which CUDA/NVIDIA packages are installed and what `apt upgrade` would change; what owns `/usr/sbin/lxc` | `dpkg -l \| grep -E '^ii +(cuda\|nvidia\|libnvidia)' \| awk '{print $2, $3}' \| head -40; apt list --upgradable 2>/dev/null \| grep -i -E 'nvidia\|cuda'; dpkg -S /usr/sbin/lxc` |
+| ~~V27~~ | done: which CUDA/NVIDIA packages are installed and what `apt upgrade` would change; what owns `/usr/sbin/lxc` | `dpkg -l \| grep -E '^ii +(cuda\|nvidia\|libnvidia)' \| awk '{print $2, $3}' \| head -40; apt list --upgradable 2>/dev/null \| grep -i -E 'nvidia\|cuda'; dpkg -S /usr/sbin/lxc` |
+| V28 | What `/usr/sbin/lxc` is (a binary, a script or a link), without running it | `ls -l /usr/sbin/lxc /usr/sbin/lxd 2>&1; file /usr/sbin/lxc; readlink -f /usr/sbin/lxc` |
 
 
 ## 2. The spine: one structure that makes the wants enforceable
