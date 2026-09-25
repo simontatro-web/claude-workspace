@@ -106,7 +106,7 @@ Labels as in the research doc. Effort per step: ESTIMATE.
   3. Move Jarvis's memory to `/home/jarvis` under git. Jarvis keeps full control of it (your Sep 22 choice).
   4. Grant read-only access to what you allow (e.g. `~/bench/results`).
   5. A polkit rule: `jarvis` may manage only `jarvis-sandbox-*` units.
-  6. No sudo for `jarvis`, and not in `lxd`. Remove `simon` from `lxd` too if LXD is installed (V24, D22): the group is a password-free root path.
+  6. No sudo for `jarvis`, and not in `lxd`. **Remove `simon` from `lxd` and purge `lxd-installer` (D22).** V29 confirmed the installer stub lets any `lxd` member install LXD without a password, which is a root path. This one does not need to wait for the rest of 1.6. Test: `id simon` has no `lxd`; `/usr/sbin/lxc` is gone. Undo: reinstall the package / re-add the group.
   7. Later, with a production edit: run llama-server as its own user, so no agent account can kill it by PID (today it runs as `simon`).
 - **Test (as `jarvis`, through the 8201 instance)**
   - Must fail: writing `/etc`, stopping `llama-server`, reading `~/.config/jarvis`, writing `/home/simon`, deleting backups.
