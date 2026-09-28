@@ -1,17 +1,13 @@
 I'm Simon. This is a HANDOFF: you are continuing a deep-research project that an earlier Claude Code session started. Its goal: speed up every model on my home AI server, jarvis-1, WITHOUT losing quality, and deliver the results as runbooks my local assistant Jarvis can execute when I paste them into its chat. Four of seven model passes are finished and pushed; model 5 (MiMo) is half-researched; models 6 and 7 have not started. Everything below summarizes what was built so far (written 2026-09-28, Central time). The files in the repo are the source of truth; this prompt tells you where they are, what they contain and what is left.
 
-=====================================================================
-1. SETUP
-=====================================================================
+## 1. SETUP
 - Repo: claude-workspace. Work ONLY on branch claude/speed-research (it already exists; last commit a093390 "Speed research: GLM-5.3-Flash runbook"):
   git fetch origin claude/speed-research claude/new-session-uyo1y3 && git checkout claude/speed-research && git pull origin claude/speed-research
 - Commit and push ONLY to claude/speed-research. Never push to claude/new-session-uyo1y3. Never edit docs/HANDOFF.md, docs/bench/ or docs/benchmarks/ (read only; they belong to the benchmark session).
 - Another Claude Code session (the "benchmark session", branch claude/new-session-uyo1y3) runs live benchmarks on the box. Do not touch its work. Re-fetch its branch before starting each model and read docs/benchmarks/ from origin/claude/new-session-uyo1y3 for the newest MEASURED numbers. As of 2026-09-28 its newest commit is still 7be739a (Sep 25): no new results since this project's model passes.
 - Read first: docs/prompts/speed-research-session.md (my original task prompt, verbatim, all rules), docs/speed-research/README.md (index), then the finished model files listed in section 5. For each new model also read docs/HANDOFF.md, docs/jarvis-briefing-2026-09-25-part5.md (wins on conflicts), docs/benchmark-campaign.md, docs/speed-levers.md and the relevant docs/wiki/ pages.
 
-=====================================================================
-2. RULES (from my original prompt, all still in force)
-=====================================================================
+## 2. RULES (from my original prompt, all still in force)
 - Call me Simon. Older notes and files on my model drive call me "Jack"; that is me, but never use that name. "Jackrong" is a Hugging Face uploader, not me.
 - Times in Chicago (Central) time.
 - Label every claim MEASURED (on my box, with date), SOURCE (with link), ESTIMATE (show the arithmetic) or VERIFY. Accuracy over reassurance: say plainly when something is wrong, unmeasured, or will not work here.
@@ -23,9 +19,7 @@ I'm Simon. This is a HANDOFF: you are continuing a deep-research project that an
 - Research standard: real sources (GitHub PRs/issues/discussions with merge state and dates, HF cards, engine source code, r/LocalLLaMA, reports from similar hardware); a link for every external claim; prefer merged, maintained, measured-on-similar-hardware levers; say plainly when something does not apply to Volta, AVX2 or this RAM size.
 - Box safety facts to keep honoring: never read or print the plain-text HF token (hf_token.txt on the model drive) or the Jarvis tool-server key (~/.config/jarvis/run-host-commands.env); the model drive is mounted read-only at /mnt/models (never write or remount it); keep each GPU under ~15,300 MiB used; never q8_0 KV on production without flash attention; never restart or recreate the open-webui container without a backup and a spare-port test; Open WebUI num_ctx must equal llama-server -c; never do my graded schoolwork.
 
-=====================================================================
-3. OUTPUT FORMAT (every model file follows it)
-=====================================================================
+## 3. OUTPUT FORMAT (every model file follows it)
 docs/speed-research/<model-slug>.md, standalone, with:
  A. Current state: MEASURED numbers with dates (from docs/benchmarks), current flags, what limits speed (with arithmetic).
  B. Ranked lever table: lever / expected gain (ESTIMATE with source) / quality risk / needs downtime? / effort / evidence links. Plus a separate costed hardware-upgrade table and a "does not apply" row.
@@ -37,9 +31,7 @@ Test folders Jarvis may write: ~/speed/ (scripts, results, models, kld, slots) a
 The busy check every step uses (must print NONE-ACTIVE):
   systemctl list-units --type=service --state=active --no-legend --plain | grep -E '^(bench-|mtp-test|il-beside|glm-test|fn-test|t27-|big-verify|build-|dl-|kld-|cpu-test)' || echo NONE-ACTIVE
 
-=====================================================================
-4. THE BOX (jarvis-1) - facts the runbooks rely on
-=====================================================================
+## 4. THE BOX (jarvis-1) - facts the runbooks rely on
 - Chassis HYVE G2GPU12, board ASUS Z10PG-D16 (BIOS 3803). 2x Xeon E5-2699 v3 (Haswell, 18 cores each, AVX2, NO AVX-512). 503 GiB RAM = 16x 32 GB dual-rank RDIMM rated 2133 but running 1866 (2 DIMMs per channel). 2 NUMA nodes (~251 GiB each; node 0 = CPUs 0-17,36-53; node 1 = 18-35,54-71). 2x Tesla V100-PCIE-16GB, both on node 0, PCIe Gen3 x16, ECC off, 200 W limit, driver 580.178.04, CUDA toolkit 12.9 (must stay <= 12.9 for sm_70). Ubuntu 24.04. numa_balancing 0, governor performance, uncore pinned by the jarvis-perf unit, THP = madvise.
 - STREAM Triad (MEASURED Sep 23 after the uncore fix): 29.5 GB/s one socket (18 threads), 59.5 GB/s both sockets interleaved (36 threads).
 - Jarvis = llama-server.service on port 8080: Qwen3.8-27B Q4_K_M from the HF cache, stock llama.cpp f4e276a20 (2026-09-21), -sm layer -ts 28,36, f16 KV, -c 24576, MTP draft ~/models/mtp-Qwen3.8-27B-Q4_0.gguf n-max 5 p-min 0.4, --parallel 2 --kv-unified, reasoning_effort xhigh; Open WebUI (docker) sends temperature 0 and num_ctx 24576.
@@ -48,9 +40,7 @@ The busy check every step uses (must print NONE-ACTIVE):
 - Ports: 8080 Jarvis; 8081 = the 27B downtime-window test server (t27_window.py) AND the proposed shared "big-model slot" services (flash-next / glm-jobs / glm-flash, one at a time) - t27_window refuses to start while 8081 is busy; 8082 = cpu_test.py test server; 8083 = the benchmark session's mtp-test.
 - Benchmark-session tools on the box: ~/bench/queue-runner.sh (queue.txt, queue.done/failed, STOP file; Jarvis-off "cpuil"/"gpu" jobs only 1-7 AM Central, max 300 min, always restarts Jarvis), ~/bench/summary.py, il-beside.py, mtp-test.py, bench.sh. Its last known plan: ik_llama.cpp head-to-head on Flash-Next (docs/bench/queue-ik.txt, 11 jobs), then MTP + interleave together, MTP-off identity check, shared-Q4 head at n-max 3, Jarvis-off interleave jobs fn-b1-*.
 
-=====================================================================
-5. WHAT HAS BEEN BUILT (branch claude/speed-research)
-=====================================================================
+## 5. WHAT HAS BEEN BUILT (branch claude/speed-research)
 Files (nothing in them has been run on the box yet; all scripts were tested only offline against a fake llama-server with stubbed systemctl/nvidia-smi/fincore/numastat):
 - docs/speed-research/README.md - index (model, file, best expected gain, status), conventions, scripts table with checksums, limits of the research session.
 - docs/speed-research/qwen3.8-27b.md - model 1, 14 steps (27B-1..27B-14).
@@ -67,9 +57,7 @@ Files (nothing in them has been run on the box yet; all scripts were tested only
   .gitignore (__pycache__/).
 - If you change cpu_test.py/gguf_bytes.py or t27_window.py: rebuild the offline test rig, re-test (check mode, reference run, near-tie comparison, busy/port/RAM refusals, SIGTERM stop leaves no child, Jarvis-probe auto-stop), regenerate the delivery script (heredoc tags CPU_TEST_END / GGUF_BYTES_END / J27_LOGSTATS_END / T27_WINDOW_END must not appear in the files), test the delivery into a fake HOME, and update every quoted line/byte/sha value (FN-1 and 27B-1 expected lines, 27B-4 sha check, README scripts table, the 27B file header).
 
-=====================================================================
-6. PER-MODEL RESULTS SO FAR
-=====================================================================
+## 6. PER-MODEL RESULTS SO FAR
 MODEL 1 - Qwen3.8-27B Q4_K_M (Jarvis), qwen3.8-27b.md
 - MEASURED: no speculation 28.1 t/s; MTP n5 p0.4 83.69 t/s on a 3,500-token generation (Sep 21); real agentic turns 29-52 t/s, prefill 480-650 t/s; temperature 0/0.3/0.8 = 51.08/42.25/41.15; sm70-attn fork with FA prefill 905.85 t/s on 14K (Sep 23); VRAM ~13.9/14.1 GiB idle; 4 silent truncations per 48 h at 24,575 tokens.
 - Limits: HBM-bound (18.96 GB per pass -> <=47 t/s at 900 GB/s; layer split = single-GPU speed); FA compiled out in production; tensor parallel (-sm tensor) needs FA and -fit off.
@@ -96,9 +84,7 @@ MODEL 4 - GLM-5.3-Flash UD-Q4_K_XL, glm-5.3-flash.md
 
 Box-level levers shared by the CPU models: THP "always" (FN-10, SIMON ONLY); BIOS Home Snoop vs the default Early Snoop (ESTIMATE 0-5%); hardware: 2x E5-2699/2696 v4 (~$150-300 used; the current DIMMs would run 2133 with 2 per channel: ESTIMATE +14% bandwidth; VERIFY v4 support in BIOS 3803), 1 DIMM per channel with 64 GB DDR4-2400 LRDIMMs and v4 CPUs (+29%), 1 TB RAM (mirror for GLM-5.3, MiMo resident; quad-rank LRDIMM may run 2133 at 2 per channel on v3 - VERIFY), a GPU that is not Jarvis's.
 
-=====================================================================
-7. MODEL 5 - MiMo-V2.6-Pro MXFP4 (+ DFlash): IN PROGRESS, no file written yet
-=====================================================================
+## 7. MODEL 5 - MiMo-V2.6-Pro MXFP4 (+ DFlash): IN PROGRESS, no file written yet
 Facts gathered (wiki mimo-v2.6-feasibility + source checks):
 - The only Pro GGUF: kernelpool/MiMo-V2.6-Pro-RL-MXFP4-GGUF, two RAW byte splits (part1 480,000,000,000 B + part2 77,146,510,560 B = 557.1 GB = 518.88 GiB, text only, no vision) that must be joined with cat before use, plus MiMo-V2.6-Pro-RL-DFlash-Q8_0.gguf (2.94 GB, a 5-layer block-diffusion draft, trained block size 7). They sit on the read-only model drive; the NVMe has ~62 GB free, so the join needs my decision (second drive, or rotate models out) - a SIMON ONLY step.
 - 1.02T total / 42B active; 70 layers; GQA 128 Q / 8 KV heads (head dims 192/128); hybrid sliding-window (window 128) + full-attention layers; 384 experts, 8 active; MXFP4 experts. ESTIMATE ~22 GB/token -> ~1.5-1.8 t/s ceiling on CPU. 518.88 GiB > 503 GiB RAM: beside Jarvis it can only run from mmap with paging (never --mlock, never --no-mmap/-lm dio); with Jarvis off, -ngl 99 -ot "ffn_.*_exps.*=CPU" keeps the ~466 GiB of experts in RAM and ~30 GiB of the ~53 GiB non-expert tensors on the V100s (ESTIMATE ~3 t/s). Vendor sampling temperature 1.0 / top_p 0.95.
@@ -106,23 +92,17 @@ Facts gathered (wiki mimo-v2.6-feasibility + source checks):
 - Still to research: whether DFlash works with a mimo2 target in production (target hidden-layer capture); ik_llama.cpp mimo2 status (issue #1769: MiMo V2.5 GGUFs fail on fused QKV); expert-streaming-from-SSD work (llama.cpp PR #25294, discussion #27149) status; sliding-window prompt-cache/checkpoint behaviour; KV bytes per token; paging cost beside Jarvis; how cpu_test.py should run it (--ram-need-gib override, -lm mmap, and note that page cache counts toward the unit's MemoryMax).
 - Then write docs/speed-research/mimo-v2.6-pro.md (A-E; prefix e.g. MM-), update README row 5, commit, push.
 
-=====================================================================
-8. MODELS 6 AND 7 - NOT STARTED
-=====================================================================
+## 8. MODELS 6 AND 7 - NOT STARTED
 6: Qwen3.8-27B-MTP (Jackrong Q3_K_M 13.5 GB / Q4_K_M 16.8 GB; single-card A/B that could free a V100), HauhauCS 27B Uncensored (IQ4_XS, Q5_K_P, FastMTP draft), Qwen3-VL-32B + mmproj, gpt-oss-20b MXFP4 + eagle3 draft (also the cheap MXFP4-on-Volta test), Qwen3-Coder-Next UD-Q3_K_XL (36.3 GB). These are GPU models: tests need Jarvis-off windows (SIMON ONLY) or must fit beside Jarvis's VRAM; ik_llama.cpp does not support Volta. Consider generalizing t27_window.py into a GPU window tester.
 7: small models in slots/, embed/, verify/: router 1.7B, 2B distill, embeddinggemma, rerankers, Qwen3-Embedding-4B, jina-code, OCR, ASR, Qwen3Guard-4B, phi3.5 hallucination judge, Qwen3-VL-4B (latency for router/guard/judge; batch throughput for embedders/rerankers).
 Each still gets its own independent pass: re-fetch the benchmark branch, research, file with A-E, README row, commit, push.
 
-=====================================================================
-9. RESEARCH ENVIRONMENT NOTES (from the first session)
-=====================================================================
+## 9. RESEARCH ENVIRONMENT NOTES (from the first session)
 - Network: huggingface.co, unsloth.ai, medium.com, hackmd.io, dl.dell.com and tu-dresden.de were blocked (403) from the session; github.com and raw.githubusercontent.com worked; web search snippets were used for HF cards and Unsloth KLD tables.
 - Read engine source directly: git clone --filter=blob:none https://github.com/ggml-org/llama.cpp (production commit f4e276a2066a40cd200db17c1131826d6c0c7a94; master read at 4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0); git fetch origin pull/N/head:pr-N for PRs; ikawrakow/ik_llama.cpp at 1aaf7105be6e55a97fa4a9fd6f5bd362b08436dc (PR #2396 head 1efab5e5); unslothai/llama.cpp glm5next/upstream (86ebfef); PrismML-Eng/llama.cpp PR #251 (306d501). git merge-tree --write-tree A B checks a clean merge without a worktree. The add_repo tool can attach public repos if cloning is blocked.
 - Offline test rig pattern used for every script: a small Python HTTP server posing as llama-server (/health after a delay, /apply-template, /completion with n_probs top_logprobs and an MTP-style near-tie divergence, /v1/chat/completions with timings.prompt_n and usage.prompt_tokens simulating prefix reuse and checkpoint log lines, /slots save/restore/erase), a second instance posing as Jarvis on another port, and stub systemctl/fincore/numastat on PATH. The scratchpad copy is gone; rebuild it before changing any script.
 
-=====================================================================
-10. OPEN ITEMS AND KNOWN RISKS
-=====================================================================
+## 10. OPEN ITEMS AND KNOWN RISKS
 - No runbook step has been executed on the box yet (per the repo as of 2026-09-28). The first things for me to paste: FN-1 and 27B-1 (SIMON STEP deliveries), then the read-only steps 27B-2, FN-2, GL-1, GF-1.
 - Port 8081 is shared by the t27 window tester and the proposed big-model services (only one may run).
 - ik --dsa with more than one sequence: VERIFY whether fixed before any --parallel > 1 with --dsa.
@@ -130,9 +110,7 @@ Each still gets its own independent pass: re-fetch the benchmark branch, researc
 - Corrected wiki claims to keep corrected: mirror gains were vs a cold distribute; "-b/-ub 4096 doubles prefill" does not hold on CPU (MEASURED flat or worse); the ik decode-gain citation; "stock GLM-5.3 ignores the indexer".
 - KTransformers / vLLM / SGLang CPU paths: not applicable on this Haswell (AVX-512/AMX/Ampere oriented; model support unverified).
 
-=====================================================================
-11. WHAT TO DO NOW
-=====================================================================
+## 11. WHAT TO DO NOW
 1. Do the setup in section 1 and read the files in section 5 plus my original prompt.
 2. Reply with a short plan and any questions, then finish model 5 (MiMo) as described in section 7, then model 6, then model 7 - one model at a time, each an independent pass, committing and pushing after each and updating README.md.
 3. Keep every existing convention: step format and size limit, busy check, units with memory limits, SIMON ONLY marking, near-tie quality rule, KLD gate for lossy levers, checksums for scripts, labels on every claim, Central time, no model identifiers in commits or files.
